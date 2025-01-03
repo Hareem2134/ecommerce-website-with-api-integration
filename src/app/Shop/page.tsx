@@ -2,7 +2,6 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { fetchProducts } from "../../app/api/productAPI";
 import ProductCard from "../../../components/ProductCard";
-import { useSearchParams } from "next/navigation";
 import { useCart } from "../../context/CartContext";
 import Link from "next/link";
 
@@ -140,7 +139,7 @@ const ShopPage = () => {
                   isProductInCart(product.id) ? (
                     <Link
                       href="/Cart"
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg shadow hover:bg-green-600 transition-all"
+                      className="px-4 py-2 bg-green-500 text-white hover:bg-green-600 transition-all"
                     >
                       Go to Cart
                     </Link>
@@ -155,7 +154,7 @@ const ShopPage = () => {
                           quantity: 1,
                         })
                       }
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition-all"
+                      className="px-4 py-2 bg-blue-500 text-white rounded transform transition-all duration-300 hover:scale-110 hover:shadow-lg"
                     >
                       Add to Cart
                     </button>

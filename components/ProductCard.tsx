@@ -42,7 +42,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, actionB
           actionButton
         ) : (
           <button
-            className="bg-blue-500 text-white w-full py-2 rounded hover:bg-blue-600 transition"
+            className="bg-blue-500 text-white w-full py-2 rounded transform transition-all duration-300 hover:scale-125 hover:shadow-lg"
             onClick={() => {
               console.log("Adding product to cart:", product); // Debugging
               if (onAddToCart) onAddToCart();

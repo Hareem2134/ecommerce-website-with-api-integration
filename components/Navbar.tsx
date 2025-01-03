@@ -2,17 +2,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { FaBars, FaTimes, FaShoppingCart, FaUser } from "react-icons/fa";
-import { useCart } from "@/context/CartContext"; // Import the useCart hook
+import { useCart } from "@/context/CartContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Access the cart state from CartContext
   const { cart } = useCart();
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (
@@ -21,7 +20,12 @@ const Navbar = () => {
       ) {
         setIsDropdownOpen(false);
       }
+
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
     };
+
     document.addEventListener("mousedown", handleOutsideClick);
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
@@ -29,10 +33,10 @@ const Navbar = () => {
   }, []);
 
   return (
-    <nav className="bg-blue-500 text-white relative z-50">
+    <nav className="bg-blue-500 text-white relative z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Hamburger Icon (Left on Smaller Screens) */}
+          {/* Hamburger Icon */}
           <div className="flex lg:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -49,8 +53,9 @@ const Navbar = () => {
             </Link>
           </div>
 
-          {/* Main Navigation Links (Hidden in Mobile View) */}
+          {/* Main Navigation Links */}
           <div
+            ref={menuRef}
             className={`absolute top-16 left-0 w-full bg-blue-500 lg:static lg:flex lg:w-auto ${
               isMenuOpen ? "block" : "hidden"
             }`}
@@ -58,32 +63,31 @@ const Navbar = () => {
             <div className="flex flex-col lg:flex-row items-center lg:space-x-6">
               <Link
                 href="/"
-                className="block mt-2 lg:mt-0 px-3 py-2 rounded hover:bg-blue-600"
+                className="block mt-2 lg:mt-0 px-3 py-2 rounded transform transition-all duration-300 hover:scale-125 hover:shadow-lg"
               >
                 Home
               </Link>
               <Link
                 href="/Shop"
-                className="block mt-2 lg:mt-0 px-3 py-2 rounded hover:bg-blue-600"
+                className="block mt-2 lg:mt-0 px-3 py-2 rounded transform transition-all duration-300 hover:scale-125 hover:shadow-lg"
               >
                 Shop
               </Link>
               <Link
                 href="/Contact"
-                className="block mt-2 lg:mt-0 px-3 py-2 rounded hover:bg-blue-600"
+                className="block mt-2 lg:mt-0 px-3 py-2 rounded transform transition-all duration-300 hover:scale-125 hover:shadow-lg"
               >
                 Contact
               </Link>
             </div>
           </div>
 
-          {/* Cart and User Section (Always on Right) */}
+          {/* Cart and User Section */}
           <div className="flex items-center space-x-4">
-
             {/* Cart Icon */}
             <Link
               href="/Cart"
-              className="flex items-center px-3 py-2 rounded hover:bg-blue-600 relative"
+              className="flex items-center px-3 py-2 rounded transform transition-all duration-300 hover:scale-125 hover:shadow-lg relative"
             >
               <FaShoppingCart size={20} className="mr-2" />
               {cart.length > 0 && (
@@ -99,11 +103,14 @@ const Navbar = () => {
               ref={dropdownRef}
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
-              <button className="flex items-center px-3 py-2 rounded hover:bg-blue-600">
+              <button className="flex items-center px-3 py-2 rounded transform transition-all duration-300 hover:scale-125 hover:shadow-lg">
                 <FaUser size={20} className="mr-2" />
               </button>
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-white text-black rounded-lg shadow-lg z-50">
+                <div
+                  className="absolute right-0 mt-2 w-40 bg-white text-black rounded-lg shadow-lg z-50"
+                  style={{ opacity: 0.9 }}
+                >
                   <Link
                     href="/Login"
                     className="block px-4 py-2 hover:bg-gray-100"

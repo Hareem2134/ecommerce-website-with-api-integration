@@ -90,10 +90,10 @@ const HomePage = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black opacity-40"></div>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-                <h3 className="text-sm sm:text-base md:text-lg font-semibold text-white mb-2 z-10">
+                <h3 className="text-sm sm:text-base md:text-lg font-semibold text-white mb-2 z-10 transform transition-all duration-300 hover:scale-125">
                   {category.name}
                 </h3>
-                <span className="mt-2 bg-blue-500 text-white text-xs sm:text-sm px-3 py-1 rounded z-10">
+                <span className="mt-2 bg-blue-500 text-white text-xs sm:text-sm px-3 py-1 rounded z-10 transform transition-all duration-300 hover:scale-125 hover:shadow-lg">
                   Shop Now
                 </span>
               </div>
