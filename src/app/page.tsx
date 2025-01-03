@@ -130,7 +130,7 @@ const HomePage = () => {
                             quantity: 1,
                           })
                         }
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition-all"
+                        className="px-4 py-2 bg-blue-500 text-white rounded transform transition-all duration-300 hover:scale-110 hover:shadow-lg"
                       >
                         Add to Cart
                       </button>
