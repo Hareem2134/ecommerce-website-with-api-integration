@@ -28,13 +28,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (existingItem) {
         return prevCart.map((cartItem) =>
           cartItem.id === item.id
-            ? { ...cartItem, quantity: cartItem.quantity + (item.quantity || 1) }
+            ? { ...cartItem, quantity: cartItem.quantity + (item.quantity > 0 ? item.quantity : 1) }
             : cartItem
         );
       }
-      return [...prevCart, { ...item, quantity: item.quantity || 1 }];
+      return [...prevCart, { ...item, quantity: item.quantity > 0 ? item.quantity : 1 }];
     });
   };
+  
 
   const removeFromCart = (id: string) => {
     setCart((prevCart) => prevCart.filter((item) => item.id !== id));

@@ -2,12 +2,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { FaBars, FaTimes, FaShoppingCart, FaUser } from "react-icons/fa";
-import router from "next/router";
+import { useCart } from "@/context/CartContext"; // Import the useCart hook
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Access the cart state from CartContext
+  const { cart } = useCart();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -42,7 +45,7 @@ const Navbar = () => {
           {/* Logo */}
           <div className="flex-shrink-0 lg:ml-4">
             <Link href="/" className="text-xl font-bold">
-              MyShop
+              <img src="/logo.png" alt="Website Logo" className="h-14 w-14" />
             </Link>
           </div>
 
@@ -76,12 +79,18 @@ const Navbar = () => {
 
           {/* Cart and User Section (Always on Right) */}
           <div className="flex items-center space-x-4">
+
             {/* Cart Icon */}
             <Link
               href="/Cart"
-              className="flex items-center px-3 py-2 rounded hover:bg-blue-600"
+              className="flex items-center px-3 py-2 rounded hover:bg-blue-600 relative"
             >
               <FaShoppingCart size={20} className="mr-2" />
+              {cart.length > 0 && (
+                <span className="bg-red-500 text-white rounded-full px-2 py-1 text-xs absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/3">
+                  {cart.reduce((acc, item) => acc + item.quantity, 0)}
+                </span>
+              )}
             </Link>
 
             {/* User Icon with Dropdown */}
@@ -119,7 +128,6 @@ const Navbar = () => {
                   >
                     Logout
                   </Link>
-
                 </div>
               )}
             </div>
