@@ -25,21 +25,17 @@ export default function ShopPageClient({
   initialProducts: SanityProduct[];
 }) {
   const router = useRouter();
-  const searchParams = new URLSearchParams(window.location.search);
-  const queryCategory = searchParams.get("category") || "All";
-
   const [products, setProducts] = useState<SanityProduct[]>(initialProducts);
   const [filteredProducts, setFilteredProducts] = useState<SanityProduct[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState(queryCategory);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [priceRange, setPriceRange] = useState<number[]>([0, 1000]);
 
   const { addToCart, cart } = useCart();
   const categories = ["All", "Fashion", "Accessories", "Electronics"];
 
   useEffect(() => {
-    setSelectedCategory(queryCategory);
-    filterProducts(products, queryCategory, priceRange);
-  }, [queryCategory, products, priceRange]);
+    filterProducts(products, selectedCategory, priceRange);
+  }, [products, selectedCategory, priceRange]);
 
   const filterProducts = (allProducts: SanityProduct[], category: string, range: number[]) => {
     let filtered = allProducts;
@@ -55,7 +51,8 @@ export default function ShopPageClient({
   };
 
   const handleCategorySelection = (category: string) => {
-    const params = new URLSearchParams(window.location.search);
+    setSelectedCategory(category);
+    const params = new URLSearchParams();
     params.set("category", category);
     router.push(`/Shop?${params.toString()}`);
   };

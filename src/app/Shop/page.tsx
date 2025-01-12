@@ -34,7 +34,6 @@ export default async function ShopPage() {
 
   return (
     <div>
-      {/* Pass products to the client component */}
       <ShopPageClient initialProducts={products} />
     </div>
   );
