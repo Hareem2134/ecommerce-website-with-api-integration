@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { client } from "@/sanity/lib/client";
@@ -19,7 +20,7 @@ interface SanityProduct {
   } | string;
 }
 
-const ShopPage = () => {
+const ShopPageContent = () => {
   const searchParams = useSearchParams();
   const queryCategory = searchParams.get("category") || "All";
 
@@ -211,5 +212,11 @@ const ShopPage = () => {
     </div>
   );
 };
+
+const ShopPage = () => (
+  <Suspense fallback={<div>Loading...</div>}>
+    <ShopPageContent />
+  </Suspense>
+);
 
 export default ShopPage;
