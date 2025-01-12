@@ -1,6 +1,6 @@
 "use client";
 
-export const dynamic = 'force-dynamic'; // Ensure this page is dynamically rendered
+export const dynamic = 'force-dynamic'; // Ensure dynamic rendering on the client
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
