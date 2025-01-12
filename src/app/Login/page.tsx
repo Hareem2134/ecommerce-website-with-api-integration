@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FaEnvelope, FaLock } from "react-icons/fa";
+import validator from "validator";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -15,11 +16,29 @@ const Login = () => {
     setLoading(true);
     setError("");
 
+    // Validate inputs
+    if (!validator.isEmail(email)) {
+      setError("Invalid email address.");
+      setLoading(false);
+      return;
+    }
+
+    if (!validator.isLength(password, { min: 6 })) {
+      setError("Password must be at least 6 characters long.");
+      setLoading(false);
+      return;
+    }
+
+    // Sanitize inputs
+    const sanitizedEmail = validator.normalizeEmail(email) as string;
+    const sanitizedPassword = validator.escape(password);
+
     try {
       // Mock authentication logic
+      console.log("Logging in with:", { sanitizedEmail, sanitizedPassword });
       await new Promise((resolve) => setTimeout(resolve, 1000));
       router.push("/");
-    } catch {
+    } catch (err) {
       setError("Invalid credentials. Please try again.");
     } finally {
       setLoading(false);
@@ -28,7 +47,7 @@ const Login = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 shadow-md rounded-md">
+      <div className="w-full max-w-md bg-white p-8 shadow-lg rounded-md border border-blue-800">
         <h1 className="text-2xl font-bold text-center mb-6">Login</h1>
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -39,7 +58,7 @@ const Login = () => {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full p-3 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-800"
               required
             />
           </div>
@@ -50,21 +69,21 @@ const Login = () => {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full p-3 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-800"
               required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 text-white bg-blue-500 rounded-md hover:bg-blue-600 transition duration-200 disabled:opacity-50"
+            className="w-full py-3 text-white bg-blue-800 rounded-md hover:bg-blue-800 transition duration-200 disabled:opacity-50"
           >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
         <p className="text-center text-sm mt-4">
           Don't have an account?{" "}
-          <a href="/Register" className="text-blue-500 hover:underline">
+          <a href="/Register" className="text-blue-800 hover:underline">
             Register
           </a>
         </p>

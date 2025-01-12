@@ -24,14 +24,14 @@ export default function CartPage() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-12">
+    <div className="container mx-auto px-6 py-12 mb-80">
       <h1 className="text-4xl font-extrabold text-center mb-12">Your Shopping Cart</h1>
       {cart.length === 0 ? (
         <div className="text-center text-gray-500">
           <p className="text-lg">Your cart is empty.</p>
           <Link
             href="/Shop"
-            className="mt-6 inline-block px-8 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-all"
+            className="mt-6 inline-block px-8 py-3 bg-blue-800 text-white rounded-lg shadow-md hover:bg-blue-700 transition-all"
           >
             Shop Now
           </Link>

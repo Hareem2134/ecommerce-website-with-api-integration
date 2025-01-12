@@ -32,21 +32,21 @@ const HeroSection = () => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 1 }}
             />
-            <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
               <motion.div
                 className="text-center text-white"
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 1, delay: 0.3 }}
               >
-                <h1 className="text-4xl font-bold mb-4">
+                <h1 className="text-4xl font-bold mb-4 transition-transform transform hover:scale-105 hover:text-blue-800 duration-300">
                   Welcome to Our Shop
                 </h1>
-                <p className="mb-6">
+                <p className="mb-6 transition-transform transform hover:scale-110 duration-300">
                   Find everything you need in one place.
                 </p>
                 <motion.button
-                  className="bg-blue-500 px-6 py-2 rounded hover:bg-blue-600"
+                  className="bg-blue-800 px-6 py-2 rounded hover:bg-blue-600"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                 >

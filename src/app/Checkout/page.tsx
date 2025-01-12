@@ -1,8 +1,9 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useCart } from "../../context/CartContext";
-import { useState, useEffect } from "react";
+import validator from "validator";
 
 type CartItem = {
   id: string;
@@ -28,6 +29,7 @@ export default function CheckoutPage() {
   const [totalPrice, setTotalPrice] = useState<number>(0);
   const [shippingOptions, setShippingOptions] = useState<ShippingRate[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<string>("");
+  const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -49,18 +51,45 @@ export default function CheckoutPage() {
   }, [cart]);
 
   const fetchShippingRates = () => {
-    if (!formData.name || !formData.city || !formData.zip) {
-      alert("Please fill in all required fields.");
+    setError("");
+
+    // Validate form data
+    if (!validator.isAlpha(formData.name.replace(/ /g, ""), "en-US")) {
+      setError("Name can only contain letters and spaces.");
+      return;
+    }
+    if (!validator.isEmail(formData.email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (!validator.isMobilePhone(formData.phone)) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
+    if (validator.isEmpty(formData.address)) {
+      setError("Address cannot be empty.");
+      return;
+    }
+    if (!validator.isAlpha(formData.city, "en-US")) {
+      setError("City can only contain letters.");
+      return;
+    }
+    if (!validator.isAlpha(formData.state, "en-US")) {
+      setError("State can only contain letters.");
+      return;
+    }
+    if (!validator.isPostalCode(formData.zip, "US")) {
+      setError("Please enter a valid ZIP code.");
       return;
     }
 
-    // Directly set mockShippingRates as the available options
+    // Set mock shipping rates
     setShippingOptions(mockShippingRates);
   };
 
   const handlePlaceOrder = () => {
     if (!selectedShipping) {
-      alert("Please select a shipping option.");
+      setError("Please select a shipping option.");
       return;
     }
 
@@ -74,14 +103,14 @@ export default function CheckoutPage() {
 
   if (isOrderPlaced) {
     return (
-      <div className="container mx-auto px-6 py-16 text-center">
-        <h1 className="text-4xl font-extrabold text-green-600 mb-6">Thank You for Your Order!</h1>
+      <div className="container mx-auto px-6 py-16 text-center mb-80">
+        <h1 className="text-4xl font-semibold text-green-700 mb-6">Thank You for Your Order!</h1>
         <p className="text-lg text-gray-600 mb-8">
           Your order has been placed successfully. You will receive a confirmation email shortly.
         </p>
         <Link
           href="/Shop"
-          className="px-8 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-all"
+          className="px-8 py-3 bg-blue-800 text-white rounded-lg shadow hover:bg-blue-700 transition-all"
         >
           Continue Shopping
         </Link>
@@ -90,14 +119,14 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto px-6 py-12">
+    <div className="container mx-auto px-6 py-12 mb-80">
       <h1 className="text-4xl font-extrabold text-center mb-12">Checkout</h1>
       {cart.length === 0 ? (
         <div className="text-center">
           <p className="text-gray-500 text-lg">Your cart is empty.</p>
           <Link
             href="/Shop"
-            className="mt-6 inline-block px-8 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-all"
+            className="mt-6 inline-block px-8 py-3 bg-blue-800 text-white rounded-lg shadow-md hover:bg-blue-700 transition-all"
           >
             Shop Now
           </Link>
@@ -200,9 +229,10 @@ export default function CheckoutPage() {
               onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
               className="p-3 border rounded"
             />
+            {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-all"
+              className="px-6 py-3 bg-blue-800 text-white rounded-lg shadow hover:bg-blue-700 transition-all"
             >
               Calculate Shipping
             </button>
@@ -220,7 +250,7 @@ export default function CheckoutPage() {
                         name="shipping"
                         value={option.id}
                         onChange={() => setSelectedShipping(option.id)}
-                        className="accent-blue-600"
+                        className="accent-blue-800"
                       />
                       {option.description} (${option.rate.toFixed(2)})
                     </label>
@@ -232,7 +262,7 @@ export default function CheckoutPage() {
 
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-6">
-              Total: $
+              Total: $ 
               {(
                 totalPrice +
                 (shippingOptions.find((opt) => opt.id === selectedShipping)?.rate || 0)

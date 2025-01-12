@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Footer = () => (
-  <footer className="bg-gray-900 text-white py-10">
+  <footer className="bg-slate-900 text-white py-10">
     <div className="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
       {/* Company Section */}
       <div>

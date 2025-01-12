@@ -33,7 +33,7 @@ const Navbar = () => {
   }, []);
 
   return (
-    <nav className="bg-blue-500 text-white relative z-50 shadow-md">
+    <nav className="bg-blue-800 text-white relative z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Hamburger Icon */}
@@ -56,7 +56,7 @@ const Navbar = () => {
           {/* Main Navigation Links */}
           <div
             ref={menuRef}
-            className={`absolute top-16 left-0 w-full bg-blue-500 lg:static lg:flex lg:w-auto ${
+            className={`absolute top-16 left-0 w-full bg-blue-800 lg:static lg:flex lg:w-auto ${
               isMenuOpen ? "block" : "hidden"
             }`}
           >
