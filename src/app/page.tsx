@@ -47,12 +47,8 @@ const HomePage: React.FC = () => {
 
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [deals, setDeals] = useState<Product[]>([]);
-  const [serverTargetTime, setServerTargetTime] = useState<number | null>(null);
-  const [loadingDeals, setLoadingDeals] = useState(true);
-  const [loadingFeatured, setLoadingFeatured] = useState(true);
-  const [errorDeals, setErrorDeals] = useState<string | null>(null);
-  const [errorFeatured, setErrorFeatured] = useState<string | null>(null);
   const { addToCart, cart } = useCart();
+  const [serverTargetTime, setServerTargetTime] = useState<number>(0);
 
   const reviews = [
     { id: 1, name: "John Doe", text: "Great product, highly recommend!" },
@@ -73,29 +69,12 @@ const HomePage: React.FC = () => {
   ];
     
   useEffect(() => {
-    // Fetch deals dynamically
-    const fetchDeals = async () => {
-      try {
-        setLoadingDeals(true);
-        const response = await fetch("/api/deals");
-        if (!response.ok) {
-          throw new Error("Failed to fetch deals.");
-        }
-        const data = await response.json();
-        setDeals(data.deals);
-        setServerTargetTime(data.serverTargetTime || null);
-      } catch (error: any) {
-        setErrorDeals(error.message);
-      } finally {
-        setLoadingDeals(false);
-      }
-    };
+    // Calculate server target time dynamically
+    setServerTargetTime(new Date().setHours(23, 59, 59, 999));
 
-    // Fetch featured products dynamically
-    const fetchFeaturedProducts = async () => {
+    const fetchProducts = async () => {
       try {
-        setLoadingFeatured(true);
-        const sanityProducts = await client.fetch(`*[_type == "product"] {
+        const sanityProducts: SanityProduct[] = await client.fetch(`*[_type == "product"] {
           _id,
           name,
           slug,
@@ -103,29 +82,31 @@ const HomePage: React.FC = () => {
           price,
           "imageUrl": image.asset->url,
           inStock,
+          tags,
           category->{
+            _id,
             title
           }
         }`);
-        const normalizedProducts = sanityProducts.map((product: any) => ({
+
+        const normalizedProducts = sanityProducts.map((product) => ({
           id: generateNumericId(product._id),
           title: product.name,
           price: product.price,
           description: product.description,
           image: product.imageUrl,
           inStock: product.inStock,
-          category: product.category?.title || "Unknown",
+          category: typeof product.category === "string" ? product.category : product.category?.title || "Unknown",
         }));
+
         setFeaturedProducts(normalizedProducts.slice(0, 6));
-      } catch (error: any) {
-        setErrorFeatured(error.message);
-      } finally {
-        setLoadingFeatured(false);
+        setDeals(normalizedProducts.slice(6, 12)); // Simulating deals of the day
+      } catch (error) {
+        console.error("Failed to fetch products from Sanity:", error);
       }
     };
 
-    fetchDeals();
-    fetchFeaturedProducts();
+    fetchProducts();
   }, []);
 
   const isProductInCart = (productId: number) =>
@@ -183,70 +164,60 @@ const HomePage: React.FC = () => {
       {/* Deals of the Day */}
       <section className="py-8 bg-gradient-to-b from-blue-50 to-white">
         <div className="max-w-screen-xl mx-auto px-6 sm:px-8 lg:px-12">
-          <h2 className="text-4xl font-semibold text-center mb-8 text-blue-800">Deals of the Day</h2>
-          {loadingDeals ? (
-            <p className="text-center text-gray-500">Loading deals...</p>
-          ) : errorDeals ? (
-            <p className="text-center text-red-500">{errorDeals}</p>
-          ) : (
-            <div>
-              <div className="text-center mb-12">
-                <p className="text-lg text-gray-700">Grab these exclusive deals before the timer runs out!</p>
-                {serverTargetTime && <CountdownTimer serverTargetTime={serverTargetTime} />}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-                {deals.map((deal) => (
-                  <div
-                    key={deal.id}
-                    className="relative bg-white shadow-lg rounded-lg overflow-hidden border border-blue-300 hover:border-blue-800 transform transition-transform duration-300 hover:shadow-2xl hover:-translate-y-2"
-                  >
-                    <Link href={`/product/${deal.id}`}>
-                      <img
-                        src={deal.image}
-                        alt={deal.title}
-                        className="w-full h-48 object-cover transition-transform duration-300 hover:scale-105"
-                      />
-                    </Link>
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{deal.title}</h3>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{deal.description}</p>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-xl font-bold text-red-600">${deal.price.toFixed(2)}</p>
-                          <p className="text-sm text-gray-500 line-through">$59.99</p>
-                        </div>
-                        <button
-                          onClick={() =>
-                            addToCart({
-                              id: deal.id.toString(),
-                              title: deal.title,
-                              price: deal.price,
-                              image: deal.image,
-                              quantity: 1,
-                            })
-                          }
-                          className="bg-blue-800 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-all"
-                        >
-                          Add to Cart
-                        </button>
-                      </div>
+          <h2 className="text-4xl font-semibold text-center mb-8 text-blue-800 transition-transform duration-300 hover:text-blue-900 hover:scale-105">Deals of the Day</h2>
+          <div className="text-center mb-12">
+            <p className="text-lg text-gray-700">Grab these exclusive deals before the timer runs out!</p>
+            {serverTargetTime > 0 && <CountdownTimer serverTargetTime={serverTargetTime} />}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+            {deals.map((deal) => (
+              <div
+                key={deal.id}
+                className="relative bg-white shadow-lg rounded-lg overflow-hidden border border-blue-300 hover:border-blue-800 transform transition-transform duration-300 hover:shadow-2xl hover:-translate-y-2"
+              >
+                <Link href={`/product/${deal.id}`}>
+                  <img
+                    src={deal.image}
+                    alt={deal.title}
+                    className="w-full h-48 object-cover transition-transform duration-300 hover:scale-105"
+                  />
+                </Link>
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{deal.title}</h3>
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">{deal.description}</p>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-xl font-bold text-red-600">${deal.price.toFixed(2)}</p>
+                      <p className="text-sm text-gray-500 line-through">$59.99</p>
                     </div>
+                    <button
+                      onClick={() =>
+                        addToCart({
+                          id: deal.id.toString(),
+                          title: deal.title,
+                          price: deal.price,
+                          image: deal.image,
+                          quantity: 1,
+                        })
+                      }
+                      className="bg-blue-800 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-all"
+                    >
+                      Add to Cart
+                    </button>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Featured Products Section */}
       <section className="py-8 bg-gradient-to-b from-blue-50 to-gray-50 px-4 sm:px-6 md:px-8">
-        <h2 className="text-3xl font-semibold text-center mb-8 text-gray-800">Featured Products</h2>
-        {loadingFeatured ? (
-          <p className="text-center text-gray-500">Loading featured products...</p>
-        ) : errorFeatured ? (
-          <p className="text-center text-red-500">{errorFeatured}</p>
-        ) : (
+        <h2 className="text-3xl font-semibold text-center mb-8 text-gray-800 transition-transform duration-300 hover:text-blue-800 hover:scale-105">
+          Featured Products
+        </h2>
+        {featuredProducts.length > 0 ? (
           <Slider {...settings}>
             {featuredProducts.map((product) => (
               <div key={product.id} className="p-4">
@@ -258,13 +229,24 @@ const HomePage: React.FC = () => {
                         alt={product.title}
                         className="w-full h-56 object-cover"
                       />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-t-lg">
+                        <p className="absolute bottom-2 left-2 text-white text-sm font-semibold">
+                          {product.category}
+                        </p>
+                      </div>
                     </div>
                   </Link>
                   <div className="p-6">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">{product.title}</h3>
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">{product.description}</p>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      {product.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+                      {product.description}
+                    </p>
                     <div className="flex justify-between items-center">
-                      <span className="text-xl font-bold text-blue-800">${product.price.toFixed(2)}</span>
+                      <span className="text-xl font-bold text-blue-800">
+                        ${product.price.toFixed(2)}
+                      </span>
                       {isProductInCart(product.id) ? (
                         <Link
                           href="/Cart"
@@ -294,6 +276,8 @@ const HomePage: React.FC = () => {
               </div>
             ))}
           </Slider>
+        ) : (
+          <p className="text-center text-gray-500 text-lg">Loading featured products...</p>
         )}
       </section>
 
