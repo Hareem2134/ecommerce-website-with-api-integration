@@ -32,7 +32,9 @@ interface Product {
   image: string;
   inStock: boolean;
   category: string;
+  slug: { current: string };
 }
+
 
 const generateNumericId = (id: string): number =>
   parseInt(id.replace(/\D/g, "").slice(0, 6)) || Math.floor(Math.random() * 100000);
@@ -97,6 +99,7 @@ const HomePage: React.FC = () => {
           image: product.imageUrl,
           inStock: product.inStock,
           category: typeof product.category === "string" ? product.category : product.category?.title || "Unknown",
+          slug: product.slug,
         }));
 
         setFeaturedProducts(normalizedProducts.slice(0, 6));
@@ -175,7 +178,7 @@ const HomePage: React.FC = () => {
                 key={deal.id}
                 className="relative bg-white shadow-lg rounded-lg overflow-hidden border border-blue-300 hover:border-blue-800 transform transition-transform duration-300 hover:shadow-2xl hover:-translate-y-2"
               >
-                <Link href={`/product/${deal.id}`}>
+                <Link href={`/products/${deal.slug?.current || ""}`}>
                   <img
                     src={deal.image}
                     alt={deal.title}
@@ -219,63 +222,64 @@ const HomePage: React.FC = () => {
         </h2>
         {featuredProducts.length > 0 ? (
           <Slider {...settings}>
-            {featuredProducts.map((product) => (
-              <div key={product.id} className="p-4">
-                <div className="bg-white shadow-lg rounded-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-3 border border-blue-300 hover:border-blue-800">
-                  <Link href={`/product/${product.id}`} className="block">
-                    <div className="relative">
-                      <img
-                        src={product.image}
-                        alt={product.title}
-                        className="w-full h-56 object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-t-lg">
-                        <p className="absolute bottom-2 left-2 text-white text-sm font-semibold">
-                          {product.category}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                  <div className="p-6">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      {product.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-                      {product.description}
-                    </p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xl font-bold text-blue-800">
-                        ${product.price.toFixed(2)}
-                      </span>
-                      {isProductInCart(product.id) ? (
-                        <Link
-                          href="/Cart"
-                          className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
-                        >
-                          Go to Cart
-                        </Link>
-                      ) : (
-                        <button
-                          onClick={() =>
-                            addToCart({
-                              id: product.id.toString(),
-                              title: product.title,
-                              price: product.price,
-                              image: product.image,
-                              quantity: 1,
-                            })
-                          }
-                          className="px-4 py-2 bg-blue-800 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
-                        >
-                          Add to Cart
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </Slider>
+  {featuredProducts.map((product) => (
+    <div key={product.id} className="p-4">
+      <div className="bg-white shadow-lg rounded-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-3 border border-blue-300 hover:border-blue-800">
+        <Link href={`/products/${product.slug.current}`} className="block">
+          <div className="relative">
+            <img
+              src={product.image}
+              alt={product.title}
+              className="w-full h-56 object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-t-lg">
+              <p className="absolute bottom-2 left-2 text-white text-sm font-semibold">
+                {product.category}
+              </p>
+            </div>
+          </div>
+        </Link>
+        <div className="p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {product.title}
+          </h3>
+          <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+            {product.description}
+          </p>
+          <div className="flex justify-between items-center">
+            <span className="text-xl font-bold text-blue-800">
+              ${product.price.toFixed(2)}
+            </span>
+            {isProductInCart(product.id) ? (
+              <Link
+                href="/Cart"
+                className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
+              >
+                Go to Cart
+              </Link>
+            ) : (
+              <button
+                onClick={() =>
+                  addToCart({
+                    id: product.id.toString(),
+                    title: product.title,
+                    price: product.price,
+                    image: product.image,
+                    quantity: 1,
+                  })
+                }
+                className="px-4 py-2 bg-blue-800 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
+              >
+                Add to Cart
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  ))}
+</Slider>
+
         ) : (
           <p className="text-center text-gray-500 text-lg">Loading featured products...</p>
         )}
