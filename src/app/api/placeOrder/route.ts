@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import Stripe from 'stripe';
+import { saveOrderToSanity } from '@/sanity/lib/client';
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -112,26 +113,59 @@ export async function POST(req: NextRequest) {
 
     // --- STEP 3: Save Order to Your Database (Conceptual) ---
     // This is where you would interact with Sanity, Supabase, Prisma, etc.
-    // const orderToSave = {
-    //   _type: 'order', // Example for Sanity
-    //   orderId: clientOrderId,
-    //   customerName: customerInfo.name,
-    //   customerEmail: customerInfo.email,
-    //   shippingAddress: { /* ... from customerInfo ... */ },
-    //   items: items, // Ensure items are in a storable format
-    //   subtotal: customerInfo.totalPrice - (shippingDetails.cost || 0), // Recalculate for safety
-    //   shippingCost: shippingDetails.cost,
-    //   shippingMethod: shippingDetails.description,
-    //   totalAmount: customerInfo.totalPrice,
-    //   shippoTransactionId: shippoTransaction.object_id,
-    //   trackingNumber: shippoTransaction.tracking_number,
-    //   labelUrl: shippoTransaction.label_url,
-    //   stripePaymentIntentId: stripePaymentIntentId,
-    //   orderDate: new Date().toISOString(),
-    //   status: 'processing', // Initial status after payment and label
-    // };
-    // console.log("API /placeOrder: Saving order to DB (simulated):", orderToSave);
-    // await yourDatabaseClient.create(orderToSave);
+    try {
+      const orderDataForSanity = {
+        // Fields from your src/sanity/schemaTypes/order.ts
+        // userId: customerInfo.userId || 'GUEST_USER', // Or however you get/define userId. This field is in your schema.
+        // If user is not logged in, decide on a placeholder or make it optional in Sanity.
+        items: items.map((item: any) => ({ // Assuming 'items' from body has product details
+          _key: item.id || item.productId, // Sanity requires a _key for array items
+          productId: String(item.id || item.productId), // Ensure it's a string
+          name: item.name, // Good to store for easier display in Sanity Studio
+          quantity: parseInt(item.quantity, 10),
+          price: parseFloat(item.price),
+        })),
+        totalAmount: parseFloat(customerInfo.totalPrice),
+        status: 'Processing', // Or 'Paid', 'Awaiting Shipment'
+        trackingNumber: shippoTransaction.tracking_number,
+        shippingAddress: {
+          _type: 'object', // Not strictly needed here but good for clarity
+          street: customerInfo.address?.street || customerInfo.formData?.addressLine1, // Adjust based on your customerInfo structure
+          city: customerInfo.address?.city || customerInfo.formData?.city,
+          state: customerInfo.address?.state || customerInfo.formData?.state,
+          zipCode: customerInfo.address?.zipCode || customerInfo.formData?.postalCode,
+          country: customerInfo.address?.country || customerInfo.formData?.countryCode, // e.g., 'US'
+        },
+        // createdAt is handled by initialValue in Sanity schema, but you can set it explicitly:
+        // createdAt: new Date().toISOString(),
+
+        // Optional: Store additional useful info (add these fields to your order.ts schema if you want them)
+        clientOrderId: clientOrderId, // Your internal order ID
+        customerName: customerInfo.name,
+        customerEmail: customerInfo.email,
+        stripePaymentIntentId: stripePaymentIntentId,
+        shippoTransactionId: shippoTransaction.object_id,
+        shippoLabelUrl: shippoTransaction.label_url,
+        shippingCost: parseFloat(shippingDetails.cost),
+        shippingMethod: shippingDetails.description,
+      };
+
+      console.log("API /placeOrder: Preparing to save order to Sanity:", orderDataForSanity);
+      const sanityResult = await saveOrderToSanity(orderDataForSanity);
+      console.log("API /placeOrder: Order successfully saved to Sanity. ID:", sanityResult._id);
+
+    } catch (dbError: any) {
+      console.error("API /placeOrder: CRITICAL - Failed to save order to Sanity after successful payment and shipping label:", dbError.message);
+      // This is a critical error. Payment and shipping are done, but order isn't in DB.
+      // - Log this extensively.
+      // - Notify administrators.
+      // - The user's order *is* placed and paid. They should still get a confirmation,
+      //   but you need to manually ensure the order is reconciled in Sanity.
+      // Consider not throwing an error back to the user here if payment/shipping was fine,
+      // as the order *is* technically processed. Log and alert for backend reconciliation.
+      // For now, we'll let the success response proceed, but this needs robust alerting.
+    }
+
 
     // --- STEP 4: Return Confirmation to Frontend ---
     const orderConfirmation: OrderPlacementResponse = {

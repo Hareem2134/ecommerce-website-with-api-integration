@@ -17,6 +17,7 @@ export default {
             type: "object",
             fields: [
               { name: "productId", title: "Product ID", type: "string" },
+              { name: "name", title: "Product Name", type: "string" },
               { name: "quantity", title: "Quantity", type: "number" },
               { name: "price", title: "Price", type: "number" },
             ],
