@@ -113,6 +113,10 @@ export async function POST(req: NextRequest) {
 
     // --- STEP 3: Save Order to Your Database (Conceptual) ---
     // This is where you would interact with Sanity, Supabase, Prisma, etc.
+
+    console.log("DEBUG: customerInfo for address:", JSON.stringify(customerInfo, null, 2));
+    console.log("DEBUG: shippingDetails:", JSON.stringify(shippingDetails, null, 2));
+
     try {
       const orderDataForSanity = {
         // Fields from your src/sanity/schemaTypes/order.ts

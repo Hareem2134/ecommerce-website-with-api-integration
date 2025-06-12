@@ -34,7 +34,7 @@ export default {
         title: "Status",
         type: "string",
         options: {
-          list: ["Pending", "Shipped", "Delivered"],
+          list: ["Pending", "Shipped", "Delivered", "Processing"],
         },
         initialValue: "Pending",
       },
@@ -61,6 +61,15 @@ export default {
         type: "datetime",
         initialValue: () => new Date().toISOString(),
       },
-    ],
-  };
-  
+    // --- FIELDS LIKELY MISSING FROM YOUR SCHEMA ---
+    // Add these if you want to store them:
+    { name: "clientOrderId", title: "Client Order ID", type: "string" },
+    { name: "customerName", title: "Customer Name", type: "string" },
+    { name: "customerEmail", title: "Customer Email", type: "string" },
+    { name: "stripePaymentIntentId", title: "Stripe Payment Intent ID", type: "string" },
+    { name: "shippoTransactionId", title: "Shippo Transaction ID", type: "string" },
+    { name: "shippoLabelUrl", title: "Shippo Label URL", type: "url" }, // 'url' type might be better
+    { name: "shippingCost", title: "Shipping Cost", type: "number" },
+    { name: "shippingMethod", title: "Shipping Method", type: "string" },
+  ],
+};
