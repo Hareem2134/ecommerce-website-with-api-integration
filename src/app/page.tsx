@@ -193,6 +193,14 @@ const HomePage: React.FC = () => {
                       <p className="text-xl font-bold text-red-600">${deal.price.toFixed(2)}</p>
                       <p className="text-sm text-gray-500 line-through">$59.99</p>
                     </div>
+                    {isProductInCart(deal.id) ? (
+                    <Link
+                      href="/Cart"
+                      className="bg-green-700 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-all"
+                    >
+                      Go to Cart
+                    </Link>
+                  ) : (
                     <button
                       onClick={() =>
                         addToCart({
@@ -201,12 +209,14 @@ const HomePage: React.FC = () => {
                           price: deal.price,
                           image: deal.image,
                           quantity: 1,
+                          slug: ""
                         })
                       }
                       className="bg-blue-800 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-all"
                     >
                       Add to Cart
                     </button>
+                  )}
                   </div>
                 </div>
               </div>
@@ -222,90 +232,90 @@ const HomePage: React.FC = () => {
         </h2>
         {featuredProducts.length > 0 ? (
           <Slider {...settings}>
-  {featuredProducts.map((product) => (
-    <div key={product.id} className="p-4">
-      <div className="bg-white shadow-lg rounded-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-3 border border-blue-300 hover:border-blue-800">
-        <Link href={`/products/${product.slug.current}`} className="block">
-          <div className="relative">
-            <img
-              src={product.image}
-              alt={product.title}
-              className="w-full h-56 object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-t-lg">
-              <p className="absolute bottom-2 left-2 text-white text-sm font-semibold">
-                {product.category}
-              </p>
+        {featuredProducts.map((product) => (
+          <div key={product.id} className="p-4">
+            <div className="bg-white shadow-lg rounded-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl hover:-translate-y-3 border border-blue-300 hover:border-blue-800">
+              <Link href={`/products/${product.slug.current}`} className="block">
+                <div className="relative">
+                  <img
+                    src={product.image}
+                    alt={product.title}
+                    className="w-full h-56 object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-t-lg">
+                    <p className="absolute bottom-2 left-2 text-white text-sm font-semibold">
+                      {product.category}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+              <div className="p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {product.title}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+                  {product.description}
+                </p>
+                <div className="flex justify-between items-center">
+                  <span className="text-xl font-bold text-blue-800">
+                    ${product.price.toFixed(2)}
+                  </span>
+                  {isProductInCart(product.id) ? (
+                    <Link
+                      href="/Cart"
+                      className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
+                    >
+                      Go to Cart
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        addToCart({
+                          id: product.id.toString(),
+                          title: product.title,
+                          price: product.price,
+                          image: product.image,
+                          quantity: 1,
+                          slug: ""
+                        })
+                      }
+                      className="px-4 py-2 bg-blue-800 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
+                    >
+                      Add to Cart
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </Link>
-        <div className="p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {product.title}
-          </h3>
-          <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-            {product.description}
-          </p>
-          <div className="flex justify-between items-center">
-            <span className="text-xl font-bold text-blue-800">
-              ${product.price.toFixed(2)}
-            </span>
-            {isProductInCart(product.id) ? (
-              <Link
-                href="/Cart"
-                className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
-              >
-                Go to Cart
-              </Link>
-            ) : (
-              <button
-                onClick={() =>
-                  addToCart({
-                    id: product.id.toString(),
-                    title: product.title,
-                    price: product.price,
-                    image: product.image,
-                    quantity: 1,
-                  })
-                }
-                className="px-4 py-2 bg-blue-800 text-white font-semibold rounded-lg shadow-md transition-transform hover:scale-105 hover:shadow-lg"
-              >
-                Add to Cart
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  ))}
-</Slider>
-
+        ))}
+      </Slider>
         ) : (
           <p className="text-center text-gray-500 text-lg">Loading featured products...</p>
         )}
       </section>
 
       {/* Reviews Section */}
-      <section className="py-16 bg-white">
-        <h2 className="text-3xl font-semibold text-center mb-8 transition-transform duration-300 hover:text-blue-800 hover:scale-105">
+      <section className="py-8 bg-gradient-to-b from-blue-50 to-gray-50 px-4 sm:px-6 md:px-8">
+        <h2 className="text-3xl font-semibold text-center mb-8 text-gray-800 transition-transform duration-300 hover:text-blue-800 hover:scale-105">
           Customer Reviews
         </h2>
         <div className="flex flex-wrap justify-center gap-12">
           {reviews.map((review) => (
             <div
               key={review.id}
-              className="w-80 p-8 rounded-lg shadow-lg bg-gray-50 border border-blue-300 hover:border-blue-800 transform transition-all hover:shadow-2xl hover:scale-105"
+              className="w-80 p-8 rounded-lg shadow-lg bg-gray-50 border border-blue-300 hover:border-blue-800 transform hover:shadow-2xl hover:scale-105"
             >
-              <p className="italic text-gray-700">"{review.text}"</p>
-              <p className="mt-4 text-right text-gray-900 font-medium">- {review.name}</p>
+              <p className="font-semibold text-black hover:scale-105">"{review.text}"</p>
+              <p className="mt-4 text-right font-semibold text-black hover:scale-105">- {review.name}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Brands Section */}
-      <section className="py-20 bg-gray-100">
-        <h2 className="text-3xl font-semibold text-center mb-8 transition-transform duration-300 hover:text-blue-800 hover:scale-105">
+      <section className="py-8 bg-gradient-to-b from-blue-50 to-gray-50 px-4 sm:px-6 md:px-8">
+        <h2 className="text-3xl font-semibold text-center mb-8 text-gray-800 transition-transform duration-300 hover:text-blue-800 hover:scale-105">
           Our Trusted Partners
         </h2>
         <div className="flex justify-center flex-wrap gap-8">

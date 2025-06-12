@@ -1,12 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": ["es2021", "dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
-    "esModuleInterop": true,
+    "esModuleInterop": true, // Enables compatibility with CommonJS modules
+    "allowSyntheticDefaultImports": true, // Allows default imports from modules without default exports
     "module": "esnext",
     "moduleResolution": "node",
     "resolveJsonModule": true,

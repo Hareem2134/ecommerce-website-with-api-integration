@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
+import { WishlistProvider } from "../context/WishlistContext"
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 
@@ -32,9 +33,11 @@ export default function RootLayout({
       >
         {/* CartProvider wraps the entire body content */}
         <CartProvider>
+        <WishlistProvider>
           <Navbar />
           <main className="flex-grow">{children}</main>
           <Footer />
+        </WishlistProvider>
         </CartProvider>
       </body>
     </html>

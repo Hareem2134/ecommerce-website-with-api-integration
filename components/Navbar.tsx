@@ -124,6 +124,12 @@ const Navbar = () => {
                     Register
                   </Link>
                   <Link
+                    href="/wishlist"
+                    className="block px-4 py-2 hover:bg-gray-100"
+                  >
+                    Wishlist
+                  </Link>
+                  <Link
                     href="/Checkout"
                     className="block px-4 py-2 hover:bg-gray-100"
                   >

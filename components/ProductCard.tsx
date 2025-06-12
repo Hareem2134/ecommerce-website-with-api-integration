@@ -1,89 +1,92 @@
 import React from "react";
 import Link from "next/link";
 
-interface Product {
-  id: number;
-  title: string;
-  price: number;
+// Interface aligned with SanityProduct structure for easier use
+export interface ProductCardProduct {
+  _id: string;
+  name: string;
+  slug: { current: string };
   description: string;
-  image: string;
+  price: number;
+  imageUrl: string;
   inStock: boolean;
-  category: string;
+  category: { _id?: string; title: string } | string; // Support both object and string category
 }
 
 interface ProductCardProps {
-  product: Product;
-  onAddToCart?: () => void; // Optional if actionButton is used
-  actionButton?: React.ReactNode; // Custom action button
+  product: ProductCardProduct;
+  actionButton?: React.ReactNode; // For "Add to Cart" or "Go to Cart"
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, actionButton }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, actionButton }) => {
+  const categoryName =
+    typeof product.category === "string"
+      ? product.category
+      : product.category?.title || "N/A";
+
   return (
-    <div className="relative group flex flex-col justify-between items-center h-[500px] border rounded-lg p-4 shadow-lg bg-white hover:shadow-2xl hover:border-blue-800 transition-all duration-300">
+    <div className="relative group flex flex-col justify-between border rounded-lg p-4 shadow-lg bg-white hover:shadow-xl transition-all duration-300 overflow-hidden min-h-[480px]">
       {/* Product Image */}
-      <Link href={`/products/${product.id}`} className="cursor-pointer w-full">
-        <div className="relative overflow-hidden rounded-md mb-4">
+      <Link href={`/products/${product.slug.current}`} className="cursor-pointer w-full block">
+        <div className="relative overflow-hidden rounded-md mb-4 aspect-square"> {/* Use aspect-square for consistent image proportions */}
           <img
-            src={product.image}
-            alt={product.title}
-            className="w-full h-40 object-contain transition-transform duration-500 group-hover:scale-110"
+            src={product.imageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black opacity-0 group-hover:opacity-10 transition-opacity duration-500"></div>
+          {/* Optional: Image overlay effect
+          <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity duration-500"></div>
+          */}
         </div>
       </Link>
 
-      {/* Product Title */}
-      <Link href={`/products/${product.id}`} className="cursor-pointer">
-        <h3 className="font-bold text-center text-lg mb-2 text-gray-800 transition-colors duration-300 group-hover:text-blue-800">
-          {product.title}
-        </h3>
-      </Link>
+      <div className="flex flex-col flex-grow justify-between">
+        <div>
+          {/* Product Title */}
+          <Link href={`/products/${product.slug.current}`} className="cursor-pointer">
+            <h3 className="font-semibold text-lg mb-2 text-gray-800 transition-colors duration-300 group-hover:text-blue-600 line-clamp-2">
+              {product.name}
+            </h3>
+          </Link>
 
-      {/* Short Description */}
-      <p className="text-gray-600 text-sm text-center mb-3 line-clamp-2 group-hover:text-gray-700 transition-colors duration-300">
-        {product.description}
-      </p>
+          {/* Short Description */}
+          <p className="text-gray-600 text-sm mb-3 line-clamp-3 group-hover:text-gray-700 transition-colors duration-300">
+            {product.description}
+          </p>
+        </div>
 
-      {/* Product Category */}
-      <p className="text-gray-500 text-sm mb-1 group-hover:text-gray-700 transition-colors duration-300">
-        Category: <span className="font-medium">{product.category}</span>
-      </p>
+        <div>
+          {/* Product Category */}
+          <p className="text-gray-500 text-xs mb-1 group-hover:text-gray-700 transition-colors duration-300">
+            Category: <span className="font-medium">{categoryName}</span>
+          </p>
 
-      {/* Stock Status with Animated Effect */}
-      <p
-        className={`text-sm mb-2 px-2 py-1 rounded-full transition-transform duration-300 ${
-          product.inStock
-            ? "bg-green-100 text-green-600 group-hover:bg-green-500 group-hover:text-white group-hover:scale-105 shadow"
-            : "bg-red-100 text-red-600 group-hover:bg-red-500 group-hover:text-white group-hover:scale-105 shadow"
-        }`}
-      >
-        {product.inStock ? "In Stock" : "Out of Stock"}
-      </p>
-
-      {/* Product Price */}
-      <p className="text-blue-800 font-bold text-xl mb-4 group-hover:text-blue-600 transition-colors duration-300">
-        ${product.price.toFixed(2)}
-      </p>
-
-      {/* Action Button with Animated Effect */}
-      <div className="w-full">
-        {actionButton ? (
-          actionButton
-        ) : (
-          <button
-            className="bg-blue-900 text-white w-full py-2 rounded-lg transform transition-all duration-300 hover:scale-110 hover:bg-gradient-to-r hover:from-blue-800 hover:to-blue-700 hover:shadow-lg"
-            onClick={() => {
-              console.log("Adding product to cart:", product); // Debugging
-              if (onAddToCart) onAddToCart();
-            }}
+          {/* Stock Status */}
+          <p
+            className={`text-xs font-semibold mb-2 py-0.5 px-1.5 inline-block rounded-md ${
+              product.inStock
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}
           >
-            Add to Cart
-          </button>
-        )}
+            {product.inStock ? "In Stock" : "Out of Stock"}
+          </p>
+
+          {/* Product Price */}
+          <p className="text-blue-700 font-bold text-xl mb-3 group-hover:text-blue-500 transition-colors duration-300">
+            ${product.price.toFixed(2)}
+          </p>
+        </div>
       </div>
 
-      {/* Hover Animation Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-gray-400 to-transparent opacity-0 group-hover:opacity-30 transition-opacity duration-300 rounded-lg"></div>
+
+      {/* Action Button */}
+      <div className="w-full mt-auto">
+        {actionButton}
+      </div>
+
+      {/* Subtle decorative element (optional) */}
+      {/* <div className="absolute bottom-0 left-0 h-1 w-0 bg-blue-500 group-hover:w-full transition-all duration-500 rounded-bl-lg"></div> */}
     </div>
   );
 };
