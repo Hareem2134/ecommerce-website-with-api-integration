@@ -15,12 +15,28 @@ export default {
         of: [
           {
             type: "object",
+            title: "Order Item", // Optional: gives a nicer title when adding new items in Studio
             fields: [
               { name: "productId", title: "Product ID", type: "string" },
               { name: "name", title: "Product Name", type: "string" },
               { name: "quantity", title: "Quantity", type: "number" },
               { name: "price", title: "Price", type: "number" },
             ],
+            preview: {
+              select: {
+                title: 'name', // Use the 'name' field for the item title
+                subtitle: 'productId',
+                quantity: 'quantity',
+                price: 'price'
+              },
+              prepare(selection: { title: any; subtitle: any; quantity: any; price: any; }) {
+                const { title, subtitle, quantity, price } = selection;
+                return {
+                  title: `${title || 'Untitled Item'} (ID: ${subtitle || 'N/A'})`,
+                  subtitle: `Qty: ${quantity || 0} @ ${price !== undefined ? Number(price).toFixed(2) : '0.00'} each`,
+                };
+              }
+            }
           },
         ],
       },
@@ -59,7 +75,7 @@ export default {
         name: "createdAt",
         title: "Created At",
         type: "datetime",
-        initialValue: () => new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       },
     // --- FIELDS LIKELY MISSING FROM YOUR SCHEMA ---
     // Add these if you want to store them:

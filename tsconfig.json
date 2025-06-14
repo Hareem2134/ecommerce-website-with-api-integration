@@ -6,10 +6,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
-    "esModuleInterop": true, // Enables compatibility with CommonJS modules
-    "allowSyntheticDefaultImports": true, // Allows default imports from modules without default exports
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "node", // Or "bundler" if using newer TS/Next versions
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -22,7 +22,15 @@
     "paths": {
       "@/*": ["./src/*"]
     }
+    // Optional: If you have a top-level 'types' folder and want to be explicit
+    // "typeRoots": ["./node_modules/@types", "./types"] 
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts", // This covers src/**/*.ts and src/**/*.d.ts
+    "**/*.tsx", // This covers src/**/*.tsx
+    ".next/types/**/*.ts",
+    "types/**/*.d.ts" // Add this line ONLY if your lucide-react.d.ts is in 'project_root/types/'
+  ],
   "exclude": ["node_modules"]
 }

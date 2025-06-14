@@ -1,10 +1,11 @@
-// src/app/Checkout/page.tsx
 "use client";
 import React, { useState, useEffect, FormEvent } from "react";
 import { useCart } from "../../context/CartContext"; // Ensure path is correct
 import validator from "validator";
-import axios from "axios";
+import axios from 'axios';
 import Link from "next/link";
+import { useRouter } from 'next/navigation'; // For App Router
+
 import {
   ShoppingCart,
   CreditCard,
@@ -13,20 +14,18 @@ import {
   Mail,
   Phone,
   MapPin,
-  PackageCheck,
+  // PackageCheck, // Removed as success UI is on another page
   ChevronLeft,
   Info,
   Loader2,
   AlertTriangle,
-  // Icons not used anymore if tracking and cart item removal from this page are gone:
-  // Trash2, Minus, Plus, PackageSearch
 } from "lucide-react";
 
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-// Initialize Stripe outside of the component to avoid re-creating on every render
-// Ensure NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is in your .env.local
+
+// Initialize Stripe outside of the component
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // --- Type Definitions ---
@@ -39,27 +38,34 @@ type CartItem = {
   slug?: string;
 };
 
-// Type for shipping rates received from your API and stored in state
 type ShippingRate = {
-  id: string; // Unique ID from your API (originally Shippo's rate object_id)
+  id: string;
   provider?: string;
   servicelevel_name?: string;
   description: string;
-  amount: number; // Numeric amount
+  amount: number;
   currency?: string;
   estimated_days?: number;
 };
 
-// Type for the response from your /api/placeOrder endpoint
-type OrderPlacementResponse = {
+type ApiOrderResponse = {
   orderId: string;
   trackingNumber: string;
-  // No carrier needed if not displaying tracking details on success screen immediately
+  shippingLabelUrl?: string;
 };
 
-// This is the inner component that will use Stripe hooks
+// It represents the data structure you'll store in sessionStorage.
+interface ConfirmedOrderData {
+  orderId: string;
+  trackingNumber: string;
+  shippingLabelUrl?: string;
+  customerEmail?: string; // Make sure this matches if you add it
+}
+
 const CheckoutFormLogic = () => {
   const { cart, clearCart, removeFromCart } = useCart();
+  const router = useRouter();
+
   const [subtotal, setSubtotal] = useState<number>(0);
   const [shippingRates, setShippingRates] = useState<ShippingRate[]>([]);
   const [selectedShippingRateId, setSelectedShippingRateId] = useState<string>("");
@@ -67,7 +73,7 @@ const CheckoutFormLogic = () => {
   const [formData, setFormData] = useState({
     name: "", email: "", phone: "",
     address: "", address2: "", city: "",
-    state: "", zip: "", country: "US", // Default country
+    state: "", zip: "", country: "US",
   });
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -77,8 +83,7 @@ const CheckoutFormLogic = () => {
   const [isCreatingPaymentIntent, setIsCreatingPaymentIntent] = useState(false);
   const [isStripeProcessing, setIsStripeProcessing] = useState(false);
   const [isFinalizingOrder, setIsFinalizingOrder] = useState(false);
-
-  const [orderDetails, setOrderDetails] = useState<OrderPlacementResponse | null>(null);
+  
   const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
 
   const stripe = useStripe();
@@ -100,7 +105,8 @@ const CheckoutFormLogic = () => {
     if (!validator.isEmail(formData.email)) {
       setFormError("Please enter a valid email address."); return false;
     }
-    if (!validator.isMobilePhone(formData.phone.replace(/[^\d]/g, ''), "any", { strictMode: false })) {
+    // Relaxed phone validation to allow more formats, primary validation by Shippo/Stripe
+    if (validator.isEmpty(formData.phone) || formData.phone.length < 7) {
       setFormError("Please enter a valid phone number."); return false;
     }
     if (validator.isEmpty(formData.address)) {
@@ -122,8 +128,8 @@ const CheckoutFormLogic = () => {
       setFormError("Please enter a valid 5-digit US ZIP code."); return false;
     } else if (countryUpper === "CA" && !validator.isPostalCode(formData.zip, "CA")) {
         setFormError("Please enter a valid Canadian Postal code."); return false;
-    } else if (validator.isEmpty(formData.zip) && !["IE", "HK"].includes(countryUpper) /* Add countries where ZIP is optional */) {
-        setFormError("Postal code is required."); return false;
+    } else if (validator.isEmpty(formData.zip) && !["IE", "HK"].includes(countryUpper)) { // Add other countries where ZIP is optional or not used
+        setFormError("Postal code is required for the selected country."); return false;
     }
 
     if (checkAllFieldsForPayment) {
@@ -133,7 +139,7 @@ const CheckoutFormLogic = () => {
         if (shippingRates.length > 0 && !selectedShippingRateId) {
             setFormError("Please select a shipping method."); return false;
         }
-         if (shippingRates.length === 0 && cart.length > 0) { // If cart has items but no rates yet
+         if (shippingRates.length === 0 && cart.length > 0) {
             setFormError("Please calculate shipping first."); return false;
         }
     }
@@ -142,12 +148,15 @@ const CheckoutFormLogic = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    // For country and state, convert to uppercase for consistency
+    const processedValue = (name === "country" || name === "state") ? value.toUpperCase() : value;
+    setFormData((prev) => ({ ...prev, [name]: processedValue }));
+
     if (stripeClientSecret) {
         setStripeClientSecret(null);
-        setPaymentApiError("Shipping details changed. Please proceed to payment again.");
+        setPaymentApiError("Shipping details changed. Please proceed to payment again to update total and payment details.");
     }
-     if (formError) setFormError(null); // Clear form error on input change
+     if (formError) setFormError(null);
   };
 
   const fetchShippingRates = async (e?: FormEvent) => {
@@ -164,7 +173,7 @@ const CheckoutFormLogic = () => {
 
     try {
       const payload = {
-        addressFrom: { name: "Your Store Name", street1: "123 Main St", city: "Anytown", state: "CA", zip: "90210", country: "US" }, // Your default origin
+        addressFrom: { name: "Your Store Name", street1: "123 Main St", city: "Anytown", state: "CA", zip: "90210", country: "US" },
         addressTo: {
           name: formData.name, street1: formData.address, street2: formData.address2,
           city: formData.city, state: formData.state, zip: formData.zip,
@@ -173,35 +182,31 @@ const CheckoutFormLogic = () => {
         parcels: [{ length: "10", width: "8", height: "4", distance_unit: "in", weight: "2", mass_unit: "lb" }],
       };
       const response = await axios.post<{ rates: ShippingRate[] }>("/api/shippoOrder", payload);
-      console.log("CheckoutPage: Rates received from /api/shippoOrder:", JSON.stringify(response.data, null, 2));
-
       if (response.data && Array.isArray(response.data.rates)) {
         const validRates = response.data.rates.filter(r => r.id && typeof r.amount === 'number' && r.description);
         setShippingRates(validRates);
         if (validRates.length > 0) {
           setSelectedShippingRateId(validRates[0].id);
-          setFormError(null); // Clear form error if rates are found
+          setFormError(null);
         } else {
-          setPaymentApiError("No shipping options available for this address.");
+          setPaymentApiError("No shipping options available for this address. Please check your address details or contact support.");
         }
       } else {
         setPaymentApiError("Could not retrieve shipping rates (invalid response).");
       }
     } catch (error: any) {
-      console.error("Error fetching shipping rates:", error);
-      setPaymentApiError(error.response?.data?.error || "Failed to get shipping rates. Check address details.");
+      setPaymentApiError(error.response?.data?.error || "Failed to get shipping rates. Please ensure all address fields are correct.");
     } finally {
       setIsLoadingShipping(false);
     }
   };
 
   const handleProceedToPayment = async () => {
-    if (!validateForm(true)) return; // validateForm(true) checks all fields including shipping selection
+    if (!validateForm(true)) return;
     setPaymentApiError(null);
     setIsCreatingPaymentIntent(true);
     try {
-      console.log("Grand total for Payment Intent:", grandTotal);
-      if (grandTotal * 100 < 50) { // Stripe minimum is 50 cents
+      if (grandTotal * 100 < 50) {
           setPaymentApiError("Order total is too low for processing. Minimum is $0.50.");
           setIsCreatingPaymentIntent(false);
           return;
@@ -212,8 +217,8 @@ const CheckoutFormLogic = () => {
         customerName: formData.name,
         customerEmail: formData.email,
         shippingAddress: {
-            street1: formData.address, street2: formData.address2, city: formData.city,
-            state: formData.state, zip: formData.zip, country: formData.country.toUpperCase(),
+            line1: formData.address, line2: formData.address2, city: formData.city,
+            state: formData.state, postal_code: formData.zip, country: formData.country.toUpperCase(),
         }
       });
       const responseData = piResponse.data as { clientSecret?: string; error?: string };
@@ -223,7 +228,6 @@ const CheckoutFormLogic = () => {
         throw new Error(responseData.error || "Failed to initialize payment (no client secret).");
       }
     } catch (error: any) {
-      console.error("Error creating PaymentIntent:", error);
       setPaymentApiError(error.response?.data?.error || error.message || "Could not connect to payment service.");
     } finally {
       setIsCreatingPaymentIntent(false);
@@ -232,130 +236,234 @@ const CheckoutFormLogic = () => {
 
   const handleFinalizeOrderWithStripe = async (event: FormEvent) => {
     event.preventDefault();
-    if (!stripe || !elements || !stripeClientSecret) {
-      setPaymentApiError("Payment system is not ready. Please refresh or try again.");
-      return;
+    if (!stripe || !elements) {
+      setPaymentApiError("Payment system is not fully loaded. Please wait a moment and try again."); return;
     }
-    const cardElement = elements.getElement(CardElement);
-    if (!cardElement) {
-      setPaymentApiError("Card details component not loaded. Please refresh.");
+
+    if (!stripeClientSecret) {
+      setPaymentApiError("Payment session expired or details changed. Please click 'Proceed to Payment Details' again.");
+      // Potentially guide user back to re-initiate payment intent step
       return;
     }
 
-    setIsStripeProcessing(true);
-    setIsFinalizingOrder(true);
-    setPaymentApiError(null);
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setPaymentApiError("Card input is not ready. Please refresh the page or try again."); return;
+    }
+
+    setIsStripeProcessing(true); setIsFinalizingOrder(true); setPaymentApiError(null);
 
     const { error: stripeConfirmError, paymentIntent } = await stripe.confirmCardPayment(stripeClientSecret, {
       payment_method: {
         card: cardElement,
-        billing_details: { name: formData.name, email: formData.email },
+        billing_details: {
+          name: formData.name,
+          email: formData.email,
+          // address: { // Optional: You can pass full billing address if different from shipping
+          //   line1: formData.address,
+          //   city: formData.city,
+          //   state: formData.state,
+          //   postal_code: formData.zip,
+          //   country: formData.country.toUpperCase(),
+          // }
+        },
       },
+      // return_url: `${window.location.origin}/order-success-interim`, // Optional: For off-session payments or 3DS
     });
 
     if (stripeConfirmError) {
-      console.error("Stripe payment confirmation error:", stripeConfirmError);
-      setPaymentApiError(stripeConfirmError.message || "Payment failed. Check card details or try another card.");
+      // Handle errors from Stripe.js (e.g., card declined, invalid card number)
+      console.error("Stripe.js payment confirmation error:", stripeConfirmError);
+      setPaymentApiError(stripeConfirmError.message || "Payment failed. Please check your card details or try another card.");
       setIsStripeProcessing(false);
       setIsFinalizingOrder(false);
+      // Depending on the error type, you might want to allow the user to try again
+      // For some errors (like 'payment_intent_unexpected_state'), the PI might be unrecoverable
+      // and you might need to clear stripeClientSecret to force re-creation.
+      if (stripeConfirmError.type === 'validation_error' || stripeConfirmError.type === 'card_error') {
+          // Allow retry with same client secret
+      } else {
+          // For other errors, it might be safer to regenerate the payment intent
+          // setStripeClientSecret(null); 
+          // setPaymentApiError(stripeConfirmError.message + " Please try initiating the payment again.");
+      }
       return;
     }
 
     if (paymentIntent && paymentIntent.status === 'succeeded') {
+
       console.log("Stripe Payment Succeeded. PaymentIntent ID:", paymentIntent.id);
+
       try {
         const selectedRateObject = shippingRates.find(r => r.id === selectedShippingRateId);
-        if (!selectedRateObject) throw new Error("Selected shipping rate details are missing during finalization.");
+        if (!selectedRateObject) throw new Error("Selected shipping rate details are missing.");
 
         const orderDataForBackend = {
-          shippoRateId: selectedShippingRateId,
-          orderId: `ECOMM_${Date.now()}`, // Generate unique order ID
-          customerInfo: { ...formData, totalPrice: grandTotal },
-          items: cart,
+          shippoRateId: selectedShippingRateId, orderId: `ECOMM_${Date.now()}`,
+          customerInfo: { ...formData, totalPrice: grandTotal , email: formData.email }, items: cart,
           shippingDetails: { description: selectedRateObject.description, cost: selectedRateObject.amount },
           stripePaymentIntentId: paymentIntent.id,
         };
-        const finalOrderResponse = await axios.post<OrderPlacementResponse>("/api/placeOrder", orderDataForBackend);
-        setOrderDetails(finalOrderResponse.data);
-        clearCart();
-        setShippingRates([]);
-        setStripeClientSecret(null);
+
+        console.log("Calling /api/placeOrder with payload:", orderDataForBackend);
+
+        const finalOrderResponse = await axios.post<ApiOrderResponse>("/api/placeOrder", orderDataForBackend);
+        const confirmedOrderDataFromApi = finalOrderResponse.data;
+        console.log("/api/placeOrder response:", confirmedOrderDataFromApi);
+
+        if (finalOrderResponse.status === 200 && confirmedOrderDataFromApi && confirmedOrderDataFromApi.orderId) {
+          // Construct the object to store, potentially adding more details
+          const dataToStoreInSession: ConfirmedOrderData = {
+              ...confirmedOrderDataFromApi, // This has orderId, trackingNumber, shippingLabelUrl
+              customerEmail: orderDataForBackend.customerInfo.email // Assuming customerInfo has email
+          };
+          sessionStorage.setItem('latestOrderConfirmation', JSON.stringify(dataToStoreInSession));
+          
+          clearCart();
+          router.push('/order-success');
+      } else {
+            throw new Error(confirmedOrderDataFromApi.orderId ? "Order placed but response was not OK." : "Failed to place order (no order ID).");
+            console.error("/api/placeOrder call seemed successful but response data is invalid:", confirmedOrderDataFromApi);
+            setPaymentApiError("Payment succeeded, but there was an issue confirming your order details with our system. Please contact support.");
+        }
       } catch (finalOrderError: any) {
-        console.error("Error in final order placement (after Stripe success):", finalOrderError.response?.data || finalOrderError.message);
-        setPaymentApiError(finalOrderError.response?.data?.error || "Payment succeeded, but there was an issue finalizing your order. Please contact support with your transaction details.");
+        // This catches errors from the axios.post call to /api/placeOrder (e.g., network error, 500 from backend)
+        // OR errors thrown manually within the try block (like missing shipping rate)
+        console.error("Caught error during final order processing:", finalOrderError);
+        
+        let displayMessage = "Payment succeeded, but there was an issue finalizing your order with our system. Please contact support.";
+
+        // Manual check for Axios error structure (duck typing)
+        // This replaces axios.isAxiosError() for better build compatibility
+        if (
+            finalOrderError &&
+            typeof finalOrderError === 'object' &&
+            // Check for properties common to AxiosError instances
+            ('isAxiosError' in finalOrderError && finalOrderError.isAxiosError === true) && // Check the flag if it exists
+            ('message' in finalOrderError || 'response' in finalOrderError) // It should have a message or a response
+        ) {
+            // It strongly looks like an AxiosError
+            const axiosError = finalOrderError as { // Cast to a shape we expect
+                isAxiosError: true;
+                message: string;
+                code?: string;
+                config?: object;
+                request?: object;
+                response?: {
+                    status?: number;
+                    data?: any; // Data can be anything
+                };
+            };
+
+            console.error("Axios-like error detected. Details:", {
+                message: axiosError.message,
+                code: axiosError.code,
+                responseStatus: axiosError.response?.status,
+                responseData: axiosError.response?.data,
+            });
+
+            if (axiosError.response && axiosError.response.data) {
+                const responseData = axiosError.response.data;
+                if (typeof responseData === 'object' && responseData !== null && 'error' in responseData) {
+                    const apiError = (responseData as { error?: unknown }).error;
+                    if (typeof apiError === 'string' && apiError.trim() !== '') {
+                        displayMessage = apiError;
+                    } else {
+                        displayMessage = axiosError.message || "An error occurred with the server response.";
+                    }
+                } else if (typeof responseData === 'string' && responseData.trim() !== '') {
+                    displayMessage = responseData;
+                } else {
+                    displayMessage = axiosError.message || "An unidentified error occurred with the server response.";
+                }
+            } else if (axiosError.message) {
+                displayMessage = axiosError.message;
+            }
+        } else if (finalOrderError instanceof Error) {
+            // Handle standard JavaScript Error objects
+            console.error("Standard JavaScript error detected:", finalOrderError.message, finalOrderError.stack);
+            
+            if (finalOrderError.message === "Critical error: Selected shipping rate details are missing during finalization.") {
+                displayMessage = finalOrderError.message + " Please refresh and try again.";
+            } else if (finalOrderError.message) {
+                displayMessage = finalOrderError.message;
+            }
+        } else {
+            // Unknown error type
+            console.error("An unknown error type was caught:", finalOrderError);
+        }
+        
+        const paymentIdSuffix = paymentIntent?.id ? ` (Payment ID: ${paymentIntent.id})` : "";
+        setPaymentApiError(displayMessage + paymentIdSuffix);
+      } finally {
+        // Only set these if not navigating away
+        // If an error occurred that prevents navigation, then reset loading states.
+        // The router.push() should happen before this if successful.
+        // This 'finally' might be tricky if navigation happens.
+        // Let's assume if an error occurs above, we will fall through here.
+        setIsStripeProcessing(false);
+        setIsFinalizingOrder(false);
       }
+    } else if (paymentIntent) {
+      // PaymentIntent exists but status is not 'succeeded' (e.g., 'requires_action', 'processing')
+      console.warn("Stripe PaymentIntent status not 'succeeded':", paymentIntent.status, paymentIntent);
+      setPaymentApiError(`Payment status: ${paymentIntent.status}. Your payment is not yet complete. Please follow any additional instructions from Stripe or try again.`);
+      setIsStripeProcessing(false);
+      setIsFinalizingOrder(false);
+      // For 'processing', you might tell the user to wait and not retry immediately.
+      // For 'requires_action', Stripe.js usually handles 3DS. If it falls here, something is unusual.
+      // Do not clear stripeClientSecret here, as the PI might still be completable.
     } else {
-      setPaymentApiError(paymentIntent ? `Payment status: ${paymentIntent.status}. Please try again.` : "Payment confirmation failed for an unknown reason.");
+      // paymentIntent is null, which means confirmCardPayment itself failed without a PI object (very rare)
+      console.error("Stripe confirmCardPayment failed without returning a PaymentIntent object.");
+      setPaymentApiError("A critical error occurred with the payment gateway. Please try again or contact support.");
+      setIsStripeProcessing(false);
+      setIsFinalizingOrder(false);
+      setStripeClientSecret(null); // Safer to regenerate PI in this unknown state
     }
-    setIsStripeProcessing(false);
-    setIsFinalizingOrder(false);
   };
 
-  const pageBackgroundColor = "#F0F2F5";
-
-  if (orderDetails) {
-    return (
-      <div style={{ backgroundColor: pageBackgroundColor }} className="min-h-screen py-12 md:py-16 flex items-center justify-center">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-2xl">
-          <div className="bg-white shadow-2xl rounded-xl p-8 md:p-12 text-center">
-            <PackageCheck size={72} className="mx-auto text-green-500 mb-6" />
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-4">Order Placed Successfully!</h1>
-            <p className="text-gray-600 text-lg mb-6">Thank you for your purchase. Your order is being processed.</p>
-            <div className="bg-gray-50 p-6 rounded-lg mb-8 text-left space-y-3">
-              <p className="text-gray-700"><strong className="font-medium text-gray-800">Order ID:</strong> {orderDetails.orderId}</p>
-              <p className="text-gray-700"><strong className="font-medium text-gray-800">Tracking Number:</strong> {orderDetails.trackingNumber || "Processing..."}</p>
-            </div>
-            {paymentApiError && (
-                 <p className="text-red-600 my-4 text-sm text-center"><AlertTriangle size={18} className="inline mr-1.5" />{paymentApiError}</p>
-            )}
-            <Link href="/Shop" className="inline-block mt-10 text-blue-600 hover:text-blue-800 font-medium hover:underline">
-              Continue Shopping
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const pageBackgroundColor = "bg-slate-100"; // Using Tailwind class for consistency
 
   const isButtonProcessing = isLoadingShipping || isCreatingPaymentIntent || isStripeProcessing || isFinalizingOrder;
 
   return (
-    <div style={{ backgroundColor: pageBackgroundColor }} className="min-h-screen py-8 md:py-12">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-8 md:mb-12">
-          <Link href="/Cart" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4 group">
-            <ChevronLeft size={20} className="mr-1 group-hover:-translate-x-1 transition-transform"/> Back to Cart
+    <div className={`${pageBackgroundColor} min-h-screen py-6 md:py-10`}>
+      <div className="container mx-auto px-4 sm:px-6"> {/* Simplified container padding */}
+        <div className="text-center mb-6 md:mb-10">
+          <Link href="/Cart" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-3 group text-sm sm:text-base">
+            <ChevronLeft size={18} className="mr-1 group-hover:-translate-x-0.5 transition-transform"/> Back to Cart
           </Link>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-800">Secure Checkout</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-800">Secure Checkout</h1>
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:gap-8 xl:gap-12">
+        <div className="flex flex-col lg:flex-row lg:gap-6 xl:gap-8">
           {/* Left Column: Shipping, Rates, Payment */}
-          <div className="lg:w-[60%] xl:w-2/3 order-2 lg:order-1">
-            {/* Stage 1: Shipping Information Form - Show if Payment Intent not created yet */}
+          <div className="w-full lg:w-[60%] xl:w-2/3 order-2 lg:order-1 mb-6 lg:mb-0">
+            {/* Stage 1: Shipping Information Form */}
             {!stripeClientSecret && (
-              <form onSubmit={fetchShippingRates} className="bg-white shadow-xl rounded-xl p-6 sm:p-8 mb-8">
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6 border-b pb-4 flex items-center">
-                  <MapPin size={24} className="mr-3 text-blue-600" /> Shipping Information
+              <form onSubmit={fetchShippingRates} className="bg-white shadow-lg rounded-lg p-4 sm:p-6 mb-6">
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5 border-b pb-3 flex items-center">
+                  <MapPin size={22} className="mr-2.5 text-blue-600" /> Shipping Information
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4"> {/* Reduced gap slightly */}
                   {[
-                    { name: "name", label: "Full Name", type: "text", icon: <User size={18} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
-                    { name: "email", label: "Email Address", type: "email", icon: <Mail size={18} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
-                    { name: "phone", label: "Phone Number", type: "tel", icon: <Phone size={18} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
-                    { name: "address", label: "Street Address", type: "text", icon: <MapPin size={18} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
-                    { name: "address2", label: "Apt, Suite, etc. (Optional)", type: "text", icon: <MapPin size={18} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
-                    { name: "city", label: "City", type: "text", icon: <MapPin size={18} className="text-gray-400"/> },
-                    { name: "state", label: "State/Province", type: "text", icon: <MapPin size={18} className="text-gray-400"/> },
-                    { name: "zip", label: "ZIP/Postal Code", type: "text", icon: <MapPin size={18} className="text-gray-400"/> },
-                    { name: "country", label: "Country (2-letter code, e.g. US)", type: "text", icon: <MapPin size={18} className="text-gray-400"/>, maxLength: 2 },
+                    { name: "name", label: "Full Name", type: "text", icon: <User size={16} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
+                    { name: "email", label: "Email Address", type: "email", icon: <Mail size={16} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
+                    { name: "phone", label: "Phone Number", type: "tel", icon: <Phone size={16} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
+                    { name: "address", label: "Street Address", type: "text", icon: <MapPin size={16} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
+                    { name: "address2", label: "Apt, Suite, etc. (Optional)", type: "text", icon: <MapPin size={16} className="text-gray-400"/>, colSpan: "sm:col-span-2" },
+                    { name: "city", label: "City", type: "text", icon: <MapPin size={16} className="text-gray-400"/> },
+                    { name: "state", label: "State/Province", type: "text", icon: <MapPin size={16} className="text-gray-400"/> },
+                    { name: "zip", label: "ZIP/Postal Code", type: "text", icon: <MapPin size={16} className="text-gray-400"/> },
+                    { name: "country", label: "Country (2-letter code)", type: "text", icon: <MapPin size={16} className="text-gray-400"/>, maxLength: 2 },
                   ].map((field) => (
                     <div key={field.name} className={field.colSpan || ""}>
-                      <label htmlFor={field.name} className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor={field.name} className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                         {field.label}
                       </label>
                       <div className="relative rounded-md shadow-sm">
-                          {field.icon && <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">{field.icon}</div>}
+                          {field.icon && <div className="pointer-events-none absolute inset-y-0 left-0 pl-2.5 sm:pl-3 flex items-center">{field.icon}</div>}
                           <input
                           type={field.type}
                           name={field.name}
@@ -363,174 +471,173 @@ const CheckoutFormLogic = () => {
                           value={formData[field.name as keyof typeof formData]}
                           onChange={handleInputChange}
                           maxLength={field.maxLength}
-                          className={`block w-full text-gray-900 ${field.icon ? 'pl-10' : 'pl-3'} pr-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-gray-400`}
-                          placeholder={field.label.replace(/\s\(.+?\)/, '')} // Remove (e.g., CA) from placeholder
+                          className={`block w-full text-gray-900 ${field.icon ? 'pl-8 sm:pl-10' : 'pl-3'} pr-3 py-2 sm:py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm placeholder-gray-400`}
+                          placeholder={field.label.split(" (")[0]}
                           required={field.name !== 'address2'}
                           />
                       </div>
                     </div>
                   ))}
                 </div>
-                {formError && <p className="mt-4 text-red-600 text-sm flex items-center"><AlertTriangle size={18} className="mr-1.5" />{formError}</p>}
+                {formError && <p className="mt-3 text-red-600 text-xs sm:text-sm flex items-center"><AlertTriangle size={16} className="mr-1.5 flex-shrink-0" />{formError}</p>}
                 <button
                   type="submit"
                   disabled={isLoadingShipping || cart.length === 0}
-                  className="mt-8 w-full flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="mt-6 w-full flex items-center justify-center bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold text-sm sm:text-base hover:bg-blue-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {isLoadingShipping ? <Loader2 size={22} className="animate-spin mr-2" /> : <Truck size={22} className="mr-2" />}
+                  {isLoadingShipping ? <Loader2 size={20} className="animate-spin mr-2" /> : <Truck size={20} className="mr-2" />}
                   {shippingRates.length > 0 ? "Recalculate Shipping" : "Calculate Shipping"}
                 </button>
               </form>
             )}
 
-            {/* Stage 2: Shipping Options - Show if rates are available and PI not created */}
+            {/* Stage 2: Shipping Options */}
             {!stripeClientSecret && shippingRates.length > 0 && (
-              <div className="bg-white shadow-xl rounded-xl p-6 sm:p-8 mb-8">
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6 border-b pb-4 flex items-center">
-                  <Truck size={24} className="mr-3 text-blue-600" /> Shipping Options
+              <div className="bg-white shadow-lg rounded-lg p-4 sm:p-6 mb-6">
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5 border-b pb-3 flex items-center">
+                  <Truck size={22} className="mr-2.5 text-blue-600" /> Shipping Options
                 </h2>
-                <div className="space-y-4">
-                  {shippingRates.map((rateItem, index) => (
-                    <React.Fragment key={rateItem.id || `rate-${index}`}>
-                      <label
-                        htmlFor={`shipping-${rateItem.id}`}
-                        className={`flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${selectedShippingRateId === rateItem.id ? "border-blue-500 ring-2 ring-blue-500 bg-blue-50" : "border-gray-300 bg-gray-50 hover:border-gray-400"}`}
-                      >
-                        <div className="flex items-center">
-                          <input
-                            type="radio"
-                            id={`shipping-${rateItem.id}`}
-                            name="shippingOption"
-                            value={rateItem.id}
-                            checked={selectedShippingRateId === rateItem.id}
-                            onChange={() => { setSelectedShippingRateId(rateItem.id); if(stripeClientSecret) setStripeClientSecret(null); setPaymentApiError(null); }}
-                            className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mr-3"
-                          />
-                          <div>
-                            <span className="font-medium text-gray-800">{rateItem.description || "N/A"}</span>
-                            {rateItem.estimated_days !== undefined && <p className="text-sm text-gray-500">Est. delivery: {rateItem.estimated_days} days</p>}
-                          </div>
+                <div className="space-y-3"> {/* Reduced space-y */}
+                  {shippingRates.map((rateItem) => (
+                    <label
+                      key={rateItem.id}
+                      htmlFor={`shipping-${rateItem.id}`}
+                      className={`flex items-center justify-between p-3 sm:p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${selectedShippingRateId === rateItem.id ? "border-blue-500 ring-2 ring-blue-500 bg-blue-50" : "border-gray-300 bg-gray-50 hover:border-gray-400"}`}
+                    >
+                      <div className="flex items-center">
+                        <input
+                          type="radio"
+                          id={`shipping-${rateItem.id}`}
+                          name="shippingOption"
+                          value={rateItem.id}
+                          checked={selectedShippingRateId === rateItem.id}
+                          onChange={() => { setSelectedShippingRateId(rateItem.id); if(stripeClientSecret) setStripeClientSecret(null); setPaymentApiError(null); }}
+                          className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mr-2 sm:mr-3"
+                        />
+                        <div className="text-xs sm:text-sm">
+                          <span className="font-medium text-gray-800">{rateItem.description || "N/A"}</span>
+                          {rateItem.estimated_days !== undefined && <p className="text-gray-500">Est. delivery: {rateItem.estimated_days} days</p>}
                         </div>
-                        <span className="text-lg font-semibold text-gray-800">${rateItem.amount.toFixed(2)}</span>
-                      </label>
-                    </React.Fragment>
+                      </div>
+                      <span className="text-sm sm:text-base font-semibold text-gray-800 ml-2">${rateItem.amount.toFixed(2)}</span>
+                    </label>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Stage 3: Proceed to Payment Button - Show if rates selected and PI not created */}
+            {/* Stage 3: Proceed to Payment Button */}
             {!stripeClientSecret && selectedShippingRateId && cart.length > 0 && (
-                <div className="bg-white shadow-xl rounded-xl p-6 sm:p-8 mb-8">
+                <div className="bg-white shadow-lg rounded-lg p-4 sm:p-6 mb-6">
                     <button
                         onClick={handleProceedToPayment}
                         disabled={isCreatingPaymentIntent || isLoadingShipping || !selectedShippingRateId}
-                        className="w-full flex items-center justify-center bg-indigo-600 text-white px-6 py-3.5 rounded-lg font-semibold text-lg hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-center bg-indigo-600 text-white px-5 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                        {isCreatingPaymentIntent ? <Loader2 size={22} className="animate-spin mr-2"/> : <CreditCard size={22} className="mr-2"/>}
+                        {isCreatingPaymentIntent ? <Loader2 size={20} className="animate-spin mr-2"/> : <CreditCard size={20} className="mr-2"/>}
                         Proceed to Payment Details
                     </button>
                 </div>
             )}
             
-            {/* Stage 4: Stripe Card Element Form - Show when clientSecret is available */}
-            {stripeClientSecret && !orderDetails && (
-              <form onSubmit={handleFinalizeOrderWithStripe} className="bg-white shadow-xl rounded-xl p-6 sm:p-8 mb-8">
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6 border-b pb-4">Enter Payment Details</h2>
-                <p className="text-sm text-gray-600 mb-4">Please enter your card details below to complete your order for a total of <strong className="text-gray-800">${grandTotal.toFixed(2)}</strong>.</p>
+            {/* Stage 4: Stripe Card Element Form */}
+            {stripeClientSecret && (
+              <form onSubmit={handleFinalizeOrderWithStripe} className="bg-white shadow-lg rounded-lg p-4 sm:p-6 mb-6">
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5 border-b pb-3">Enter Payment Details</h2>
+                <p className="text-xs sm:text-sm text-gray-600 mb-4">Complete your order for <strong className="text-gray-800">${grandTotal.toFixed(2)}</strong>.</p>
                 <div className="p-3 border border-gray-200 rounded-md bg-slate-50">
-                    <CardElement options={{ style: { base: { fontSize: '16px', color: '#32325d', '::placeholder': {color: '#aab7c4'} } } }} />
+                    <CardElement options={{ style: { base: { fontSize: '16px', color: '#32325d', fontFamily: '"Helvetica Neue", Helvetica, sans-serif', '::placeholder': {color: '#aab7c4'} } } }} />
                 </div>
-                {paymentApiError && <p className="mt-4 text-red-600 text-sm flex items-center"><AlertTriangle size={18} className="mr-1.5" />{paymentApiError}</p>}
+                {paymentApiError && <p className="mt-3 text-red-600 text-xs sm:text-sm flex items-center"><AlertTriangle size={16} className="mr-1.5 flex-shrink-0" />{paymentApiError}</p>}
                 <button
                   type="submit"
-                  disabled={!stripe || !elements || isStripeProcessing || isFinalizingOrder}
-                  className="mt-8 w-full flex items-center justify-center bg-green-600 text-white px-6 py-3.5 rounded-lg font-semibold text-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                  disabled={!stripe || !elements || isButtonProcessing}
+                  className="mt-6 w-full flex items-center justify-center bg-green-600 text-white px-5 py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-green-700 transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {(isStripeProcessing || isFinalizingOrder) ? <Loader2 size={22} className="animate-spin mr-2" /> : <CreditCard size={22} className="mr-2" />}
+                  {isButtonProcessing ? <Loader2 size={20} className="animate-spin mr-2" /> : <CreditCard size={20} className="mr-2" />}
                   Pay ${grandTotal.toFixed(2)} and Place Order
                 </button>
               </form>
             )}
 
-            {/* General API Error Display (for non-payment specific issues if any) */}
-            {formError && !stripeClientSecret && ( // Only show formError if not yet on payment step
-                 <p className="my-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start">
-                    <AlertTriangle size={20} className="mr-2 flex-shrink-0"/>
+            {/* General API Error Display (only if not at payment step and not a form validation error) */}
+            {paymentApiError && !stripeClientSecret && !formError && (
+                 <p className="my-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs sm:text-sm flex items-start">
+                    <AlertTriangle size={18} className="mr-2 flex-shrink-0"/>
+                    <span>{paymentApiError}</span>
+                 </p>
+            )}
+             {formError && !stripeClientSecret && ( // Show form error if not at payment step
+                 <p className="my-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs sm:text-sm flex items-start">
+                    <AlertTriangle size={18} className="mr-2 flex-shrink-0"/>
                     <span>{formError}</span>
                  </p>
             )}
           </div>
 
-          {/* Right Column: Order Summary (always visible until order is placed) */}
-          {!orderDetails && (
-            <div className="lg:w-[40%] xl:w-1/3 order-1 lg:order-2 lg:sticky lg:top-24 self-start">
-              <div className="bg-white shadow-xl rounded-xl p-6 sm:p-8">
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6 border-b pb-4 flex items-center">
-                  <ShoppingCart size={24} className="mr-3 text-blue-600" /> Order Summary
-                </h2>
-                <div className="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
-                  {cart.length > 0 ? cart.map((item) => (
-                    <div key={item.id} className="flex items-start gap-4 pb-4 border-b border-gray-200 last:border-b-0">
-                      <img src={item.image} alt={item.title} className="w-16 h-16 object-cover rounded-md flex-shrink-0" />
-                      <div className="flex-grow">
-                        <h3 className="text-sm font-medium text-gray-800 leading-tight">{item.title}</h3>
-                        <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
-                        <p className="text-xs text-gray-500">@ ${item.price.toFixed(2)}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-semibold text-gray-800">${(item.price * item.quantity).toFixed(2)}</p>
-                          <button
-                              onClick={() => { removeFromCart(item.id); if (stripeClientSecret) setStripeClientSecret(null);}} // Reset PI if cart changes
-                              className="text-xs text-red-500 hover:text-red-700 mt-1"
-                              aria-label={`Remove ${item.title}`}
-                          >
-                              Remove
-                          </button>
-                      </div>
+          {/* Right Column: Order Summary */}
+          <div className="w-full lg:w-[40%] xl:w-1/3 order-1 lg:order-2 lg:sticky lg:top-6 self-start"> {/* Adjusted sticky top */}
+            <div className="bg-white shadow-lg rounded-lg p-4 sm:p-6">
+              <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5 border-b pb-3 flex items-center">
+                <ShoppingCart size={22} className="mr-2.5 text-blue-600" /> Order Summary
+              </h2>
+              <div className="space-y-3 mb-5 max-h-60 sm:max-h-72 overflow-y-auto pr-1"> {/* Adjusted max-h */}
+                {cart.length > 0 ? cart.map((item) => (
+                  <div key={item.id} className="flex items-start gap-3 pb-3 border-b border-gray-200 last:border-b-0">
+                    <img src={item.image} alt={item.title} className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-md flex-shrink-0" />
+                    <div className="flex-grow min-w-0"> {/* Added min-w-0 for flex truncation */}
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-800 leading-tight truncate">{item.title}</h3>
+                      <p className="text-xs text-gray-500">Qty: {item.quantity} @ ${item.price.toFixed(2)}</p>
                     </div>
-                  )) : ( <p className="text-gray-500 text-center py-4">Your cart is empty.</p> )}
-                </div>
-                <div className="space-y-2 mb-6">
-                  <div className="flex justify-between text-gray-700">
-                    <span>Subtotal</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    <div className="text-right flex-shrink-0 ml-2">
+                        <p className="text-xs sm:text-sm font-semibold text-gray-800">${(item.price * item.quantity).toFixed(2)}</p>
+                        <button
+                            onClick={() => { removeFromCart(item.id); if (stripeClientSecret) setStripeClientSecret(null);}}
+                            className="text-xs text-red-500 hover:text-red-700 mt-0.5"
+                            aria-label={`Remove ${item.title}`}
+                        >
+                            Remove
+                        </button>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-gray-700">
-                    <span>Shipping</span>
-                    <span className="font-medium">
-                      {selectedShippingRateId && shippingRates.length > 0 ? `$${selectedShippingCost.toFixed(2)}` : (cart.length > 0 ? "Calculate shipping" : "---")}
-                    </span>
-                  </div>
+                )) : ( <p className="text-gray-500 text-center py-4 text-sm">Your cart is empty.</p> )}
+              </div>
+              <div className="space-y-1.5 mb-5 text-sm sm:text-base"> {/* Adjusted font size and spacing */}
+                <div className="flex justify-between text-gray-700">
+                  <span>Subtotal</span>
+                  <span className="font-medium">${subtotal.toFixed(2)}</span>
                 </div>
-                <div className="border-t pt-4">
-                  <div className="flex justify-between text-xl font-bold text-gray-800">
-                    <span>Total</span>
-                    <span>${grandTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-                 <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
-                    <Info size={28} className="text-blue-500 mr-2 flex-shrink-0" />
-                    <p className="text-xs text-blue-700">
-                        All transactions are secure and encrypted. Review your order before payment.
-                    </p>
+                <div className="flex justify-between text-gray-700">
+                  <span>Shipping</span>
+                  <span className="font-medium">
+                    {selectedShippingRateId && shippingRates.length > 0 ? `$${selectedShippingCost.toFixed(2)}` : (cart.length > 0 ? "Select above" : "---")}
+                  </span>
                 </div>
               </div>
+              <div className="border-t pt-3">
+                <div className="flex justify-between text-lg sm:text-xl font-bold text-gray-800">
+                  <span>Total</span>
+                  <span>${grandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+                <div className="mt-5 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
+                  <Info size={24} className="text-blue-500 mr-2 mt-0.5 flex-shrink-0" /> {/* Adjusted icon size */}
+                  <p className="text-xs sm:text-sm text-blue-700">
+                      All transactions are secure and encrypted. Please review your order details before proceeding with payment.
+                  </p>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// Main component that wraps CheckoutFormWithStripeLogic with Elements provider
-export default function CheckoutPage() {
+export default function CheckoutPageWrapper() {
     return (
         <Elements stripe={stripePromise} options={{
-            // Optional: Define appearance or other global options for Elements
-            // appearance: { theme: 'stripe' }, // Example: 'stripe', 'night', 'flat'
-            // locale: 'en',
+            // appearance: { theme: 'stripe' }, // Example themes: 'stripe', 'night', 'flat', 'none'
         }}>
             <CheckoutFormLogic />
         </Elements>

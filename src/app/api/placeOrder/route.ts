@@ -1,4 +1,3 @@
-// src/app/api/placeOrder/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import Stripe from 'stripe';
@@ -6,7 +5,7 @@ import { saveOrderToSanity } from '@/sanity/lib/client';
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil', // Use latest stable API version
+  apiVersion: '2025-05-28.basil', // Use the latest stable API version
 });
 
 // Interface for the raw Shippo transaction response we might expect
@@ -16,15 +15,14 @@ interface ShippoTransactionResponse {
   label_url: string;
   status: string; // 'SUCCESS', 'ERROR', etc.
   messages?: Array<{ source?: string; code?: string; text?: string }>;
-  // Potentially other fields like rate details if needed
-  rate?: any; // Can be string (ID) or object
+  rate?: any;
 }
 
 // Interface for what this API will return to the frontend on successful order placement
 interface OrderPlacementResponse {
     orderId: string;
     trackingNumber: string;
-    // No carrier needed if not displaying tracking details on success screen immediately
+    shippingLabelUrl?: string; // This is the new field
 }
 
 export async function POST(req: NextRequest) {
@@ -42,17 +40,17 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
-      shippoRateId,          // ID of the selected shipping rate from Shippo
-      orderId: clientOrderId, // Your frontend-generated order ID (e.g., ECOMM_TIMESTAMP)
-      customerInfo,          // Contains formData (name, email, address, etc.) and totalPrice (grandTotal)
-      items,                 // Array of cart items
-      shippingDetails,       // Contains description and cost of the selected shipping rate
-      stripePaymentIntentId  // The ID of the successful Stripe PaymentIntent
+      shippoRateId,
+      orderId: clientOrderId,
+      customerInfo,
+      items: itemsFromBody, // Renamed to avoid confusion with mapped items
+      shippingDetails,
+      stripePaymentIntentId
     } = body;
 
     console.log("API /placeOrder: Received data:", { shippoRateId, clientOrderId, stripePaymentIntentIdPresent: !!stripePaymentIntentId, customerName: customerInfo?.name });
 
-    if (!shippoRateId || !clientOrderId || !customerInfo || !items || !shippingDetails || !stripePaymentIntentId) {
+    if (!shippoRateId || !clientOrderId || !customerInfo || !itemsFromBody || !shippingDetails || !stripePaymentIntentId) {
       console.warn("API /placeOrder: Missing required order or payment details in request body:", body);
       return NextResponse.json({ error: "Missing required order or payment details." }, { status: 400 });
     }
@@ -62,8 +60,7 @@ export async function POST(req: NextRequest) {
       const paymentIntent = await stripe.paymentIntents.retrieve(stripePaymentIntentId);
       if (paymentIntent.status !== 'succeeded') {
         console.error(`API /placeOrder: Stripe Payment Intent ${stripePaymentIntentId} not 'succeeded'. Actual status: ${paymentIntent.status}`);
-        // TODO: Update order status in your DB to "payment_failed" or similar
-        return NextResponse.json({ error: `Payment not successful. Status: ${paymentIntent.status}` }, { status: 402 }); // 402 Payment Required
+        return NextResponse.json({ error: `Payment not successful. Status: ${paymentIntent.status}` }, { status: 402 });
       }
       console.log(`API /placeOrder: Stripe Payment Intent ${stripePaymentIntentId} confirmed as 'succeeded'. Amount: ${paymentIntent.amount / 100} ${paymentIntent.currency.toUpperCase()}`);
     } catch (stripeError: any) {
@@ -74,9 +71,9 @@ export async function POST(req: NextRequest) {
     // --- STEP 2: Create Shippo Transaction (Purchase Label) ---
     const transactionPayload = {
       rate: shippoRateId,
-      label_file_type: "PDF_4x6", // Or your preferred label type
+      label_file_type: "PDF_4x6",
       async: false,
-      metadata: `Order ${clientOrderId}`, // Optional metadata
+      metadata: `Order ${clientOrderId}`,
     };
 
     console.log("API /placeOrder: Payload to Shippo Transactions API:", transactionPayload);
@@ -90,68 +87,61 @@ export async function POST(req: NextRequest) {
     const shippoTransaction = shippoTransactionResponse.data;
     console.log("API /placeOrder: Full Shippo Transaction Response:", JSON.stringify(shippoTransaction, null, 2));
 
-    if (shippoTransaction.status !== 'SUCCESS' || !shippoTransaction.tracking_number) {
-      console.error(`API /placeOrder: Shippo transaction failed or missing tracking. Status: ${shippoTransaction.status}. Messages:`, shippoTransaction.messages);
-      // CRITICAL: Payment succeeded, but shipping label failed.
-      // This requires robust handling: extensive logging, admin notification,
-      // potentially attempt an automatic Stripe refund, and clear user communication.
-      // TODO: Implement refund logic or flag for manual review/refund.
-      // await stripe.refunds.create({ payment_intent: stripePaymentIntentId, reason: 'requested_by_customer', /* or other reason */ });
+    // MODIFIED: Check for label_url in the success condition
+    if (shippoTransaction.status !== 'SUCCESS' || !shippoTransaction.tracking_number || !shippoTransaction.label_url) {
+      console.error(`API /placeOrder: Shippo transaction failed, missing tracking, or missing label URL. Status: ${shippoTransaction.status}. Messages:`, shippoTransaction.messages);
       return NextResponse.json(
         {
           error: "Your payment was successful, but there was an issue generating the shipping label. Please contact support with your Order ID for assistance.",
-          internalError: true, // Flag for frontend to display a specific message
+          internalError: true,
           details: shippoTransaction.messages || "Shipping provider error.",
-          orderId: clientOrderId, // Return orderId so user can reference it
-          paymentIntentId: stripePaymentIntentId, // For support to find the payment
+          orderId: clientOrderId,
+          paymentIntentId: stripePaymentIntentId,
+          // We don't have a label URL to return here
         },
-        { status: 502 } // 502 Bad Gateway (error from upstream server - Shippo)
+        { status: 502 }
       );
     }
 
-    console.log(`API /placeOrder: Shippo transaction SUCCESS. Tracking: ${shippoTransaction.tracking_number}`);
+    console.log(`API /placeOrder: Shippo transaction SUCCESS. Tracking: ${shippoTransaction.tracking_number}, Label URL: ${shippoTransaction.label_url}`);
 
-    // --- STEP 3: Save Order to Your Database (Conceptual) ---
-    // This is where you would interact with Sanity, Supabase, Prisma, etc.
-
+    // --- STEP 3: Save Order to Sanity ---
+    // Your existing console.log statements for debugging
     console.log("DEBUG: customerInfo for address:", JSON.stringify(customerInfo, null, 2));
     console.log("DEBUG: shippingDetails:", JSON.stringify(shippingDetails, null, 2));
+    console.log("API /placeOrder - customerInfo for userId:", JSON.stringify(customerInfo, null, 2));
+    console.log("API /placeOrder - raw items from body:", JSON.stringify(itemsFromBody, null, 2));
+    console.log("API /placeOrder - Full customerInfo object for address:", JSON.stringify(customerInfo, null, 2));
 
     try {
       const orderDataForSanity = {
-        // Fields from your src/sanity/schemaTypes/order.ts
-        // userId: customerInfo.userId || 'GUEST_USER', // Or however you get/define userId. This field is in your schema.
-        // If user is not logged in, decide on a placeholder or make it optional in Sanity.
-        items: items.map((item: any) => ({ // Assuming 'items' from body has product details
-          _key: item.id || item.productId, // Sanity requires a _key for array items
-          productId: String(item.id || item.productId), // Ensure it's a string
-          name: item.name, // Good to store for easier display in Sanity Studio
-          quantity: parseInt(item.quantity, 10),
-          price: parseFloat(item.price),
-        })),
+        userId: customerInfo?.userId || 'GUEST_USER',
+        items: Array.isArray(itemsFromBody) ? itemsFromBody.map((item: any, index: number) => ({
+          _key: item.id || item.productId || `item-${Date.now()}-${index}`,
+          productId: String(item.productId || item.id || 'UNKNOWN_PRODUCT'),
+          name: String(item.title || 'Untitled Product'), // Uses item.title
+          quantity: parseInt(item.quantity, 10) || 1,
+          price: parseFloat(item.price) || 0,
+        })) : [],
         totalAmount: parseFloat(customerInfo.totalPrice),
-        status: 'Processing', // Or 'Paid', 'Awaiting Shipment'
+        status: 'Processing',
         trackingNumber: shippoTransaction.tracking_number,
         shippingAddress: {
-          _type: 'object', // Not strictly needed here but good for clarity
-          street: customerInfo.address?.street || customerInfo.formData?.addressLine1, // Adjust based on your customerInfo structure
-          city: customerInfo.address?.city || customerInfo.formData?.city,
-          state: customerInfo.address?.state || customerInfo.formData?.state,
-          zipCode: customerInfo.address?.zipCode || customerInfo.formData?.postalCode,
-          country: customerInfo.address?.country || customerInfo.formData?.countryCode, // e.g., 'US'
+          street: String(customerInfo?.address || ''), // Uses customerInfo.address
+          city: String(customerInfo?.city || ''),
+          state: String(customerInfo?.state || ''),
+          zipCode: String(customerInfo?.zip || ''),    // Uses customerInfo.zip
+          country: String(customerInfo?.country || ''),
         },
-        // createdAt is handled by initialValue in Sanity schema, but you can set it explicitly:
-        // createdAt: new Date().toISOString(),
-
-        // Optional: Store additional useful info (add these fields to your order.ts schema if you want them)
-        clientOrderId: clientOrderId, // Your internal order ID
+        clientOrderId: clientOrderId,
         customerName: customerInfo.name,
         customerEmail: customerInfo.email,
         stripePaymentIntentId: stripePaymentIntentId,
         shippoTransactionId: shippoTransaction.object_id,
-        shippoLabelUrl: shippoTransaction.label_url,
+        shippoLabelUrl: shippoTransaction.label_url, // Make sure this is saved
         shippingCost: parseFloat(shippingDetails.cost),
         shippingMethod: shippingDetails.description,
+        createdAt: new Date().toISOString(), // Explicitly setting for consistency
       };
 
       console.log("API /placeOrder: Preparing to save order to Sanity:", orderDataForSanity);
@@ -160,21 +150,16 @@ export async function POST(req: NextRequest) {
 
     } catch (dbError: any) {
       console.error("API /placeOrder: CRITICAL - Failed to save order to Sanity after successful payment and shipping label:", dbError.message);
-      // This is a critical error. Payment and shipping are done, but order isn't in DB.
-      // - Log this extensively.
-      // - Notify administrators.
-      // - The user's order *is* placed and paid. They should still get a confirmation,
-      //   but you need to manually ensure the order is reconciled in Sanity.
-      // Consider not throwing an error back to the user here if payment/shipping was fine,
-      // as the order *is* technically processed. Log and alert for backend reconciliation.
-      // For now, we'll let the success response proceed, but this needs robust alerting.
+      // Decide if this should prevent success response. For now, it proceeds.
     }
 
 
     // --- STEP 4: Return Confirmation to Frontend ---
+    // MODIFIED: Include shippingLabelUrl in the response
     const orderConfirmation: OrderPlacementResponse = {
       orderId: clientOrderId,
       trackingNumber: shippoTransaction.tracking_number,
+      shippingLabelUrl: shippoTransaction.label_url, // Add the label URL here
     };
 
     return NextResponse.json(orderConfirmation, { status: 200 });
